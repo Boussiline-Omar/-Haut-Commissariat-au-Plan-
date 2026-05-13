@@ -1,0 +1,14 @@
+Individu.csv
+Menage.csv
+*.csv
+*.dta
+*.sav
+outputs/*.pkl
+outputs/*.csv
+__pycache__/
+*.pyc
+venv/
+.venv/
+env/
+dashboard/node_modules/
+dashboard/build/

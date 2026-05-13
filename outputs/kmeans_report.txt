@@ -1,0 +1,43 @@
+=================================================================
+  RAPPORT — Segmentation Régionale K-Means
+  RGPH 2014 — Maroc
+=================================================================
+
+  Nombre de clusters : 2
+  Inertie finale     : 122.9187
+  Silhouette Score   : 0.1257
+  Itérations         : 2
+
+─────────────────────────────────────────────────────────────────
+  COMPOSITION DES CLUSTERS
+─────────────────────────────────────────────────────────────────
+
+  Cluster 0 — Développé & Actif (7 profils)
+  Régions : Tanger-Tétouan-Al Hoceïma | Oriental | Fès-Meknès | Rabat-Salé-Kénitra | Drâa-Tafilalet | Guelmim-Oued Noun | Laâyoune-Sakia El Hamra
+    niv_edu_moyen                : 2.5153
+    taux_emploi                  : 0.1352
+    taux_chomage                 : 0.2679
+    ratio_dependance             : 0.4348
+    pct_alphabete                : 0.6245
+
+  Cluster 1 — Vulnérable & Dépendant (5 profils)
+  Régions : Béni Mellal-Khénifra | Casablanca-Settat | Marrakech-Safi | Souss-Massa | Dakhla-Oued Ed-Dahab
+    niv_edu_moyen                : 2.4920
+    taux_emploi                  : 0.1352
+    taux_chomage                 : 0.2717
+    ratio_dependance             : 0.4397
+    pct_alphabete                : 0.6264
+
+─────────────────────────────────────────────────────────────────
+  MÉTRIQUES DE SÉLECTION DU K
+─────────────────────────────────────────────────────────────────
+ k    inertia  silhouette  calinski
+ 2 123.777618    0.112684  2.603248
+ 3  98.848620    0.112617  2.601768
+ 4  81.663581    0.092829  2.427403
+ 5  67.773881    0.069999  2.278100
+ 6  51.569760    0.074757  2.430034
+ 7  40.013733    0.071142  2.415551
+ 8  28.891610    0.073069  2.513995
+
+=================================================================
