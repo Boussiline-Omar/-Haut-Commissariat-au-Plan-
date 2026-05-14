@@ -83,11 +83,23 @@ XGB_FEATURES = [
 # ──────────────────────────────────────────────────────────────
 
 def load_and_etl(path: str) -> pd.DataFrame:
-    """Charge le CSV individus et applique l'ETL minimal."""
-    from RGPH_projet.rgph_pipeline import (
-        load_individu, run_etl,
-        feature_engineering_individu, generate_synthetic_data
-    )
+    """Charge le CSV individus et applique l'ETL minimal.
+
+    Le module est conçu pour être exécuté directement depuis le dossier du projet.
+    On importe donc rgph_pipeline en local, avec un fallback si le projet est
+    transformé plus tard en package Python.
+    """
+    try:
+        from RGPH_projet.rgph_pipeline import (
+            load_individu, run_etl,
+            feature_engineering_individu, generate_synthetic_data
+        )
+    except ImportError:
+        from RGPH_projet.rgph_pipeline import (
+            load_individu, run_etl,
+            feature_engineering_individu, generate_synthetic_data
+        )
+
     if not os.path.exists(path):
         print(f"[WARN] '{path}' introuvable → données synthétiques")
         df = generate_synthetic_data(n=50_000)
@@ -408,7 +420,7 @@ def compute_shap_summary(model, X_sample: pd.DataFrame,
     - Utilisable pour justifier les scores devant le jury
     """
     try:
-        import shap
+        import shap # type: ignore
         print("\n[SHAP] Calcul des valeurs SHAP (échantillon)...")
 
         explainer = shap.TreeExplainer(model)

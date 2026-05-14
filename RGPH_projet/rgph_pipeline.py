@@ -85,7 +85,7 @@ def load_individu(path: str) -> pd.DataFrame:
     if ext == ".csv":
         df = pd.read_csv(path, low_memory=False)
     elif ext in (".dta", ".sav"):
-        import pyreadstat
+        import pyreadstat # type: ignore
         df, _ = pyreadstat.read_dta(path)
     else:
         raise ValueError(f"Format non supporté : {ext}")

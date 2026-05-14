@@ -79,12 +79,23 @@ MILIEU_NAMES = {1: "Urbain", 2: "Rural"}
 # ──────────────────────────────────────────────────────────────
 
 def load_and_prepare(path: str) -> pd.DataFrame:
-    """Charge les données et applique l'ETL du pipeline principal."""
+    """Charge les données et applique l'ETL du pipeline principal.
+
+    Priorité à l'import local car les fichiers sont dans le même dossier.
+    Le fallback package est gardé si le projet est installé plus tard.
+    """
     try:
-        from RGPH_projet.rgph_pipeline import (
-            load_individu, run_etl,
-            feature_engineering_individu, generate_synthetic_data
-        )
+        try:
+            from RGPH_projet.rgph_pipeline import (
+                load_individu, run_etl,
+                feature_engineering_individu, generate_synthetic_data
+            )
+        except ImportError:
+            from RGPH_projet.rgph_pipeline import (
+                load_individu, run_etl,
+                feature_engineering_individu, generate_synthetic_data
+            )
+
         if not os.path.exists(path):
             print(f"[WARN] '{path}' introuvable → données synthétiques")
             df = generate_synthetic_data(n=50_000)
