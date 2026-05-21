@@ -7,9 +7,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - MODELS_DIR=/app/outputs/
+      - MODELS_DIR=/app/models/
     volumes:
       - ./outputs:/app/outputs
+      - ./models:/app/models
       - ./static:/app/static
       - ./rgph_dashboard.html:/app/rgph_dashboard.html
       - ./main.py:/app/main.py

@@ -11,6 +11,7 @@ COPY main.py .
 COPY rgph_dashboard.html .
 COPY static/ static/
 COPY outputs/ outputs/
+COPY models/ models/
 
 # Exposer le port
 EXPOSE 8000

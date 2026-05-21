@@ -100,6 +100,11 @@ body{font-family:'DM Mono',monospace;background:var(--surface);color:var(--ink);
 .ring-legend{display:flex;flex-direction:column;gap:8px}
 .ring-item{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink2)}
 .ring-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.chart-missing{
+  min-height:120px;display:flex;align-items:center;justify-content:center;
+  color:var(--ink3);font-size:11px;text-align:center;line-height:1.45;padding:1rem;
+}
+.chart-missing[hidden]{display:none}
 
 .feat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .feat-card{
@@ -183,22 +188,22 @@ tr:hover td{background:var(--surface)}
   <div class="kpi-row">
     <div class="kpi">
       <div class="kpi-label">Population recensée</div>
-      <div class="kpi-value">33,8M</div>
-      <div class="kpi-sub">× 10 (poids sondage pds≈10)</div>
+      <div class="kpi-value">—</div>
+      <div class="kpi-sub">Data unavailable</div>
     </div>
     <div class="kpi">
       <div class="kpi-label">Taux d'emploi national</div>
-      <div class="kpi-value">28,2%</div>
+      <div class="kpi-value">—</div>
       <div class="kpi-sub"><span class="kpi-dot" style="background:var(--teal)"></span>actifs occupés</div>
     </div>
     <div class="kpi">
       <div class="kpi-label">Taux d'alphabétisme</div>
-      <div class="kpi-value">74,0%</div>
+      <div class="kpi-value">—</div>
       <div class="kpi-sub">lisent et écrivent</div>
     </div>
     <div class="kpi">
       <div class="kpi-label">Individus très vulnérables</div>
-      <div class="kpi-value">31,1%</div>
+      <div class="kpi-value">—</div>
       <div class="kpi-sub"><span class="kpi-dot" style="background:var(--red)"></span>score XGBoost</div>
     </div>
   </div>
@@ -209,17 +214,16 @@ tr:hover td{background:var(--surface)}
         <span class="card-title">Vulnérabilité individuelle — XGBoost</span>
       </div>
       <div class="card-body">
-        <div class="vuln-ring">
+        <div class="vuln-ring" id="vulnRing">
           <div class="ring-wrap">
-            <canvas id="donutChart" role="img" aria-label="Répartition de la vulnérabilité : 33.9% non vulnérables, 35% vulnérables, 31.1% très vulnérables">33.9% non vulnérables, 35% vulnérables, 31.1% très vulnérables</canvas>
-            <div class="ring-center"><div class="big">50K</div><div class="sm">individus</div></div>
+            <canvas id="donutChart" role="img" aria-label="Répartition de la vulnérabilité">Données indisponibles</canvas>
+            <div class="ring-center"><div class="big" id="vulnTotal">—</div><div class="sm">individus</div></div>
           </div>
-          <div class="ring-legend">
-            <div class="ring-item"><div class="ring-dot" style="background:#0d7f6e"></div>Non vulnérable — 33,9%</div>
-            <div class="ring-item"><div class="ring-dot" style="background:#c47a1a"></div>Vulnérable — 35,0%</div>
-            <div class="ring-item"><div class="ring-dot" style="background:#b83232"></div>Très vulnérable — 31,1%</div>
+          <div class="ring-legend" id="vulnLegend">
+            <div style="color:var(--ink3);font-size:11px">Data unavailable</div>
           </div>
         </div>
+        <div class="chart-missing" id="vulnMissing" hidden></div>
       </div>
     </div>
 
@@ -287,30 +291,30 @@ tr:hover td{background:var(--surface)}
   <div class="kpi-row">
     <div class="kpi">
       <div class="kpi-label">Random Forest — F1</div>
-      <div class="kpi-value">0.876</div>
-      <div class="kpi-sub">weighted · 5-fold CV</div>
+      <div class="kpi-value" id="rfF1Value">—</div>
+      <div class="kpi-sub" id="rfF1Sub">Data unavailable</div>
     </div>
     <div class="kpi">
       <div class="kpi-label">XGBoost — AUC ROC</div>
-      <div class="kpi-value">0.998</div>
-      <div class="kpi-sub">multiclasse OvR</div>
+      <div class="kpi-value" id="xgbAucValue">—</div>
+      <div class="kpi-sub" id="xgbAucSub">Data unavailable</div>
     </div>
     <div class="kpi">
       <div class="kpi-label">K-Means — silhouette</div>
-      <div class="kpi-value">0.151</div>
-      <div class="kpi-sub">K=2 retenu</div>
+      <div class="kpi-value" id="kmeansSilValue">—</div>
+      <div class="kpi-sub" id="kmeansSilSub">Data unavailable</div>
     </div>
     <div class="kpi">
       <div class="kpi-label">Features XGBoost</div>
-      <div class="kpi-value">26</div>
-      <div class="kpi-sub">dont 3 avec NaN natifs</div>
+      <div class="kpi-value" id="xgbFeatureCount">—</div>
+      <div class="kpi-sub" id="xgbFeatureSub">Data unavailable</div>
     </div>
   </div>
   <div class="card">
     <div class="card-head"><span class="card-title">Performance comparative des modèles</span></div>
     <div class="card-body">
       <div style="position:relative;width:100%;height:220px">
-        <canvas id="modelChart" role="img" aria-label="Comparaison des métriques des 3 modèles ML">Random Forest F1 0.876, XGBoost F1 0.998, K-Means silhouette 0.151</canvas>
+        <canvas id="modelChart" role="img" aria-label="Comparaison des métriques des modèles ML">Données modèle indisponibles</canvas>
       </div>
     </div>
   </div>
@@ -335,12 +339,7 @@ tr:hover td{background:var(--surface)}
             <div class="sim-field">
               <label class="sim-label">Région</label>
               <select class="sim-select" id="s-reg">
-                <option value="6">Casablanca-Settat</option>
-                <option value="4">Rabat-Salé-Kénitra</option>
-                <option value="3">Fès-Meknès</option>
-                <option value="7">Marrakech-Safi</option>
-                <option value="8">Drâa-Tafilalet</option>
-                <option value="1">Tanger-Tétouan</option>
+                <option value="">Chargement des régions...</option>
               </select>
             </div>
             <div class="sim-field">
@@ -425,116 +424,83 @@ tr:hover td{background:var(--surface)}
 <script src="/static/vendor/chart.umd.js"></script>
 <script>
 const API_BASE = window.location.origin;
-let REGIONS = {};
-let DASHBOARD_KPI = null;
-let CLUSTER_COLORS = ["#0d7f6e","#1a5c9e","#c47a1a","#7c3abd","#b83232","#2db8a0"];
-let CLUSTER_LABELS = ["Cluster 0","Cluster 1","Cluster 2","Cluster 3"];
-const REGION_NAME_FALLBACKS = {
-  1:"Tanger-Tétouan-Al Hoceïma", 2:"Oriental", 3:"Fès-Meknès",
-  4:"Rabat-Salé-Kénitra", 5:"Béni Mellal-Khénifra", 6:"Casablanca-Settat",
-  7:"Marrakech-Safi", 8:"Drâa-Tafilalet", 9:"Souss-Massa",
-  10:"Guelmim-Oued Noun", 11:"Laâyoune-Sakia El Hamra", 12:"Dakhla-Oued Ed-Dahab"
+const ENDPOINTS = {
+  regions: '/regions',
+  dashboard: '/stats/dashboard',
+  segmentation: '/segmentation/regions',
+  prediction: '/predict/individu',
+  xgbFeatureImportance: '/model/xgboost/feature-importance',
+  map: '/static/data/morocco_regions.geojson',
 };
+const CLUSTER_COLORS = ["#0d7f6e","#1a5c9e","#c47a1a","#7c3abd","#b83232","#2db8a0"];
+const FEATURE_COLORS = ["#0d7f6e","#1a5c9e","#c47a1a","#b83232","#7c3abd","#2db8a0"];
+const MODEL_METRICS = [
+  ["accuracy", "Accuracy"],
+  ["f1_weighted", "F1 weighted"],
+  ["precision", "Précision"],
+  ["recall", "Rappel"],
+  ["auc_roc", "AUC ROC"],
+  ["avg_precision", "Avg precision"],
+];
+const CLASS_LABELS = ['Non vulnérable','Vulnérable','Très vulnérable'];
+const CLASS_COLORS = ['#0d7f6e','#c47a1a','#b83232'];
 
+let REGIONS = {};
+let REGION_NAMES_BY_ID = {};
+let REGION_ID_BY_NORMALIZED_NAME = {};
+let DASHBOARD_KPI = null;
+let XGB_MODEL_INFO = null;
+let CLUSTER_LABELS = {};
+let MAP_GEOJSON = null;
+let selectedRegion = null;
+let currentIndicator = 'cluster';
+let dashboardLoadPromise = null;
+const CHARTS = {};
+
+function parseNumber(value){
+  if(value === undefined || value === null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
 function present(value, fallback='N/D'){
   return value === undefined || value === null || value === '' || Number.isNaN(value) ? fallback : value;
 }
-function num(value, fallback=0){
-  if(value === undefined || value === null || value === '') return fallback;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
 function pct(value, digits=1, fallback='N/D'){
-  if(value === undefined || value === null || value === '') return fallback;
-  const n = Number(value);
+  const n = parseNumber(value);
   return Number.isFinite(n) ? (n*100).toFixed(digits)+'%' : fallback;
 }
-function regionName(raw, id){
-  return present(raw?.nom ?? raw?.name ?? raw?.region_label ?? raw?.profil_label ?? raw?.region_name, REGION_NAME_FALLBACKS[id] || `Région ${id}`);
+function scorePct(value, digits=1, fallback='N/D'){
+  const n = parseNumber(value);
+  return Number.isFinite(n) ? n.toFixed(digits)+'%' : fallback;
 }
-
-async function loadRegionData(){
-  try{
-    const res=await fetch(`${API_BASE}/segmentation/regions`);
-    if(!res.ok) throw new Error(`API error: ${res.status}`);
-    const data=await res.json();
-    if(Array.isArray(data.clusters) && data.clusters.length){
-      data.clusters.forEach(c=>{
-        const id = num(c.cluster_id, 0);
-        CLUSTER_LABELS[id] = present(c.label, `Cluster ${id}`);
-      });
-    }
-    
-    REGIONS={};
-    (data.regions||[]).forEach(r=>{
-      const id = num(r.reg_id ?? r.reg ?? r.id, 0);
-      if(!id) return;
-      const cluster = num(r.cluster, 0);
-      const vulnScore = num(r.score_vulnerabilite, null);
-      const vuln01 = num(r.score_continu, Number.isFinite(vulnScore) ? vulnScore/100 : null);
-      REGIONS[id]={
-        id,
-        name:regionName(r, id),
-        cluster,
-        cluster_label:present(r.cluster_label, CLUSTER_LABELS[cluster] || `Cluster ${cluster}`),
-        taux_emploi:num(r.taux_emploi, 0.3),
-        taux_chomage:r.taux_chomage,
-        niv_edu:num(r.niv_edu_moyen, 2.5),
-        vuln:vuln01,
-        vuln_score:vulnScore,
-        pct_alpha:num(r.pct_alphabete, 0.7),
-        ratio_dep:num(r.ratio_dependance, 0.42),
-      };
-    });
-    
-    console.log('Régions chargées:',REGIONS);
-    return REGIONS;
-  }catch(err){
-    console.error('Erreur chargement régions:',err);
-    return {};
-  }
+function formatNumber(value, digits=1, fallback='N/D'){
+  const n = parseNumber(value);
+  return Number.isFinite(n) ? n.toFixed(digits) : fallback;
 }
-
-async function loadDashboardKPI(){
-  try{
-    const res=await fetch(`${API_BASE}/stats/dashboard`);
-    if(!res.ok) throw new Error(`API error: ${res.status}`);
-    const data=await res.json();
-    
-    DASHBOARD_KPI=data;
-    updateKPIDisplay(data);
-    
-    console.log('KPIs chargés:',data);
-    return data;
-  }catch(err){
-    console.error('Erreur chargement KPIs:',err);
-  }
+function formatTotal(value, fallback='—'){
+  const n = parseNumber(value);
+  return Number.isFinite(n) ? new Intl.NumberFormat('fr-FR').format(n) : fallback;
 }
-
-function updateKPIDisplay(kpis){
-  if(!kpis.national) return;
-  const nat=kpis.national;
-  
-  const kpiElements=document.querySelectorAll('.kpi-row .kpi');
-  if(kpiElements.length>=4){
-    if(nat.age_moyen_national) kpiElements[0].querySelector('.kpi-value').textContent=nat.age_moyen_national;
-    if(nat.taux_emploi_moyen!==undefined) kpiElements[1].querySelector('.kpi-value').textContent=(nat.taux_emploi_moyen*100).toFixed(1)+'%';
-    if(nat.pct_alphabete_moyen!==undefined) kpiElements[2].querySelector('.kpi-value').textContent=(nat.pct_alphabete_moyen*100).toFixed(1)+'%';
-    if(nat.nb_regions) kpiElements[3].querySelector('.kpi-value').textContent=nat.nb_regions;
-  }
+function escapeHTML(value){
+  return String(present(value, ''))
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
 }
-
-async function initDashboard(){
-  document.body.style.opacity='0.7';
-  await Promise.all([loadRegionData(),loadDashboardKPI()]);
-  buildBarList();
-  buildFeatGrid();
-  document.body.style.opacity='1';
+function setText(id, text){
+  const el = document.getElementById(id);
+  if(el) el.textContent = text;
 }
-
+function setUnavailable(id, subId){
+  setText(id, '—');
+  if(subId) setText(subId, 'Data unavailable');
+}
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
 function lerp(t,a,b){return a+(b-a)*t}
 function colorScale(v,lo,hi,c0,c1){
+  if(!Number.isFinite(v)) return '#d8d3ca';
   const t=clamp((v-lo)/(hi-lo),0,1);
   return lerpColor(t,c0,c1);
 }
@@ -542,40 +508,182 @@ function hexToRgb(h){const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),1
 function rgbToHex(r,g,b){return'#'+[r,g,b].map(x=>Math.round(x).toString(16).padStart(2,'0')).join('')}
 function lerpColor(t,c0,c1){const a=hexToRgb(c0),b=hexToRgb(c1);return rgbToHex(lerp(t,a[0],b[0]),lerp(t,a[1],b[1]),lerp(t,a[2],b[2]))}
 
-function getColor(regId, indicator){
-  const r=REGIONS[regId];
-  if(!r) return '#ccc';
-  if(indicator==='cluster') return CLUSTER_COLORS[r.cluster] || '#ccc';
-  if(indicator==='taux_emploi') return colorScale(num(r.taux_emploi,0.3),0.25,0.36,'#fdeaea','#0d7f6e');
-  if(indicator==='niv_edu') return colorScale(num(r.niv_edu,2.5),2.0,3.5,'#fdeaea','#1a5c9e');
-  if(indicator==='vuln') return colorScale(num(r.vuln,0.5),0.4,0.57,'#e1f5f0','#b83232');
-  return '#ccc';
-}
-
-const MAP_GEOJSON_URL = '/static/data/morocco_regions.geojson';
-let MAP_GEOJSON = null;
-const REGION_ID_BY_NAME = {
-  'tangiertetouanalhoceima':1, 'tangertetouanalhoceima':1, 'tangertetouan':1,
-  'oriental':2,
-  'fezmeknes':3, 'fesmeknes':3,
-  'rabatsalekenitra':4, 'rabatsalekénitra':4,
-  'benimellalkhenifra':5, 'bénimellalkhénifra':5,
-  'casablancasettat':6,
-  'marrakechsafi':7,
-  'draatafilalet':8, 'drâatafilalet':8,
-  'soussmassa':9,
-  'guelmimouednoun':10,
-  'laayounesakiaelhamra':11, 'laâyounesakiaelhamra':11,
-  'dakhlaouededdahab':12
-};
-
-let selectedRegion = null;
-let currentIndicator = 'cluster';
-
 function normalizeName(value){
   return String(value || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .toLowerCase().replace(/[^a-z0-9]/g,'');
+    .toLowerCase().replace(/[^a-z0-9]/g,'')
+    .replace(/^fez/,'fes');
+}
+function displayRegionName(id, raw){
+  const direct = raw?.nom ?? raw?.name ?? raw?.region_label ?? raw?.profil_label ?? raw?.region_name ?? raw?.shapeName;
+  return String(present(direct, REGION_NAMES_BY_ID[id] || REGIONS[id]?.name || `Région ${id}`));
+}
+function regionName(raw, id){
+  return displayRegionName(id, raw);
+}
+async function loadJson(path, label){
+  const res = await fetch(`${API_BASE}${path}`);
+  if(!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
+  return res.json();
+}
+function mergeRegion(id, updates){
+  const safeId = Number(id);
+  if(!Number.isFinite(safeId) || safeId < 1) return;
+  const previous = REGIONS[safeId] || {id:safeId, name:displayRegionName(safeId)};
+  REGIONS[safeId] = {...previous, ...updates, id:safeId, name:present(updates.name, previous.name || displayRegionName(safeId))};
+}
+function regionIdFromRecord(record){
+  const id = parseNumber(record?.reg_id ?? record?.reg ?? record?.id);
+  return Number.isFinite(id) ? id : null;
+}
+async function loadRegionList(){
+  const select = document.getElementById('s-reg');
+  try{
+    const data = await loadJson(ENDPOINTS.regions, 'regions');
+    REGION_NAMES_BY_ID = {};
+    REGION_ID_BY_NORMALIZED_NAME = {};
+    (data.regions || []).forEach(region=>{
+      const id = regionIdFromRecord(region);
+      const name = region?.nom ?? region?.name;
+      if(!id || !name) return;
+      REGION_NAMES_BY_ID[id] = String(name);
+      REGION_ID_BY_NORMALIZED_NAME[normalizeName(name)] = id;
+      mergeRegion(id, {name:String(name), source_regions:true});
+    });
+    if(select){
+      const entries = Object.entries(REGION_NAMES_BY_ID).sort((a,b)=>Number(a[0])-Number(b[0]));
+      select.innerHTML = entries.length
+        ? entries.map(([id,name])=>`<option value="${id}">${escapeHTML(name)}</option>`).join('')
+        : '<option value="">Data unavailable</option>';
+      select.disabled = entries.length === 0;
+    }
+    return true;
+  }catch(err){
+    console.error('Erreur chargement /regions:', err);
+    if(select){
+      select.innerHTML = '<option value="">Régions indisponibles</option>';
+      select.disabled = true;
+    }
+    return false;
+  }
+}
+async function loadDashboardKPI(){
+  try{
+    const data = await loadJson(ENDPOINTS.dashboard, 'stats dashboard');
+    DASHBOARD_KPI = data;
+    (data.regions || []).forEach(region=>{
+      const id = regionIdFromRecord(region);
+      if(!id) return;
+      const score = parseNumber(region.score_vulnerabilite);
+      const score01 = parseNumber(region.score_continu);
+      mergeRegion(id, {
+        name:displayRegionName(id, region),
+        taux_emploi:parseNumber(region.taux_emploi),
+        taux_chomage:parseNumber(region.taux_chomage),
+        niv_edu:parseNumber(region.niv_edu_moyen),
+        pct_alpha:parseNumber(region.pct_alphabete),
+        ratio_dep:parseNumber(region.ratio_dependance),
+        pct_handicap:parseNumber(region.pct_handicap),
+        age_moyen:parseNumber(region.age_moyen),
+        pct_mineurs:parseNumber(region.pct_mineurs),
+        pct_seniors:parseNumber(region.pct_seniors),
+        indice_scol_moyen:parseNumber(region.indice_scol_moyen),
+        taux_mortalite_proxy:parseNumber(region.taux_mortalite_proxy),
+        vuln_score:score,
+        vuln:Number.isFinite(score01) ? score01 : (Number.isFinite(score) ? score/100 : null),
+        source_dashboard:true,
+      });
+    });
+    return data;
+  }catch(err){
+    console.error('Erreur chargement /stats/dashboard:', err);
+    DASHBOARD_KPI = null;
+    return null;
+  }
+}
+async function loadSegmentation(){
+  try{
+    const data = await loadJson(ENDPOINTS.segmentation, 'segmentation regions');
+    CLUSTER_LABELS = {};
+    (data.clusters || []).forEach(cluster=>{
+      const id = parseNumber(cluster.cluster_id);
+      if(Number.isFinite(id)) CLUSTER_LABELS[id] = String(present(cluster.label, `Cluster ${id}`));
+    });
+    (data.regions || []).forEach(region=>{
+      const id = regionIdFromRecord(region);
+      const cluster = parseNumber(region.cluster);
+      if(!id) return;
+      mergeRegion(id, {
+        name:displayRegionName(id, region),
+        cluster,
+        cluster_label:present(region.cluster_label, Number.isFinite(cluster) ? CLUSTER_LABELS[cluster] || `Cluster ${cluster}` : 'Data unavailable'),
+        source_segmentation:true,
+      });
+    });
+    return data;
+  }catch(err){
+    console.error('Erreur chargement /segmentation/regions:', err);
+    return null;
+  }
+}
+async function loadXgbModelInfo(){
+  try{
+    XGB_MODEL_INFO = await loadJson(ENDPOINTS.xgbFeatureImportance, 'xgboost feature importance');
+    return XGB_MODEL_INFO;
+  }catch(err){
+    console.error('Erreur chargement /model/xgboost/feature-importance:', err);
+    XGB_MODEL_INFO = {available:false, feature_importance:[], metrics:{}, message:'Données XGBoost indisponibles'};
+    return XGB_MODEL_INFO;
+  }
+}
+async function loadDashboardData(){
+  if(dashboardLoadPromise) return dashboardLoadPromise;
+  dashboardLoadPromise = (async()=>{
+    await loadRegionList();
+    await Promise.allSettled([loadDashboardKPI(), loadSegmentation(), loadXgbModelInfo()]);
+    return {regions:REGIONS, dashboard:DASHBOARD_KPI};
+  })();
+  return dashboardLoadPromise;
+}
+async function initDashboard(){
+  document.body.style.opacity='0.7';
+  await loadDashboardData();
+  updateKPIDisplay();
+  updateModelKpis();
+  buildBarList();
+  buildFeatGrid();
+  renderAllCharts();
+  document.body.style.opacity='1';
+}
+
+function updateKPIDisplay(){
+  const kpiElements = document.querySelectorAll('#vue-globale .kpi-row .kpi');
+  if(kpiElements.length < 4) return;
+  const nat = DASHBOARD_KPI?.national || {};
+  const indiv = DASHBOARD_KPI?.vulnerabilite_individuelle || null;
+  const population = parseNumber(nat.population_totale);
+  kpiElements[0].querySelector('.kpi-value').textContent = formatTotal(population);
+  kpiElements[0].querySelector('.kpi-sub').textContent = Number.isFinite(population) ? `${present(nat.nb_regions, 'N/D')} régions` : 'Data unavailable';
+  kpiElements[1].querySelector('.kpi-value').textContent = pct(nat.taux_emploi_moyen);
+  kpiElements[2].querySelector('.kpi-value').textContent = pct(nat.pct_alphabete_moyen);
+  const veryVulnerable = parseNumber(indiv?.pct_tres_vulnerable);
+  kpiElements[3].querySelector('.kpi-value').textContent = Number.isFinite(veryVulnerable) ? veryVulnerable.toFixed(1)+'%' : '—';
+  kpiElements[3].querySelector('.kpi-sub').innerHTML = Number.isFinite(veryVulnerable)
+    ? `<span class="kpi-dot" style="background:var(--red)"></span>${formatTotal(indiv.nb_individus, 'N/D')} individus scorés`
+    : '<span class="kpi-dot" style="background:var(--red)"></span>Data unavailable';
+}
+function updateModelKpis(){
+  const modeles = DASHBOARD_KPI?.modeles || {};
+  const xgb = XGB_MODEL_INFO || modeles.xgboost || {};
+  const rfF1 = parseNumber(modeles.random_forest?.metrics?.f1_weighted);
+  const xgbAuc = parseNumber(xgb.metrics?.auc_roc);
+  const kSil = parseNumber(modeles.kmeans?.metrics?.silhouette);
+  const kVal = parseNumber(modeles.kmeans?.metrics?.k);
+  const xgbFeatures = Array.isArray(xgb.feature_importance) && xgb.feature_importance.length ? xgb.feature_importance.length : null;
+  Number.isFinite(rfF1) ? (setText('rfF1Value', rfF1.toFixed(3)), setText('rfF1Sub', 'weighted · rapport modèle')) : setUnavailable('rfF1Value','rfF1Sub');
+  Number.isFinite(xgbAuc) ? (setText('xgbAucValue', xgbAuc.toFixed(3)), setText('xgbAucSub', 'multiclasse OvR · rapport modèle')) : (setText('xgbAucValue','—'), setText('xgbAucSub', present(xgb.message, 'Data unavailable')));
+  Number.isFinite(kSil) ? (setText('kmeansSilValue', kSil.toFixed(3)), setText('kmeansSilSub', `K=${Number.isFinite(kVal) ? kVal : 'N/D'} retenu`)) : setUnavailable('kmeansSilValue','kmeansSilSub');
+  Number.isFinite(xgbFeatures) ? (setText('xgbFeatureCount', String(xgbFeatures)), setText('xgbFeatureSub', 'rapport XGBoost')) : (setText('xgbFeatureCount','—'), setText('xgbFeatureSub', present(xgb.message, 'Data unavailable')));
 }
 
 function featureRegionId(feature){
@@ -584,12 +692,12 @@ function featureRegionId(feature){
   const match = String(iso || '').match(/(?:MA-)?(\d{1,2})$/i);
   if(match) return Number(match[1]);
   const nameKey = normalizeName(props.shapeName || props.name || props.nom || props.region_label || props.NAME_1);
-  return REGION_ID_BY_NAME[nameKey] || null;
+  return REGION_ID_BY_NORMALIZED_NAME[nameKey] || null;
 }
 
 async function loadMapGeoJSON(){
   if(MAP_GEOJSON) return MAP_GEOJSON;
-  const res = await fetch(MAP_GEOJSON_URL);
+  const res = await fetch(ENDPOINTS.map);
   if(!res.ok) throw new Error(`Map GeoJSON error: ${res.status}`);
   MAP_GEOJSON = await res.json();
   return MAP_GEOJSON;
@@ -649,7 +757,7 @@ async function buildMap(){
   svg.innerHTML='';
   svg.setAttribute('viewBox','0 0 500 620');
   try{
-    if(Object.keys(REGIONS).length === 0) await loadRegionData();
+    await loadDashboardData();
     const geojson = await loadMapGeoJSON();
     const features = (geojson.features || []).filter(f=>featureRegionId(f));
     const project = makeProjector(features, 500, 620);
@@ -662,10 +770,10 @@ async function buildMap(){
       path.setAttribute('id','region-'+regionId);
       path.setAttribute('class','region-path');
       path.setAttribute('data-id',regionId);
-      path.setAttribute('data-name', present(r?.name, regionName(feature.properties, regionId)));
+      path.setAttribute('data-name', displayRegionName(regionId, feature.properties));
       path.addEventListener('mouseenter',e=>{
         const tt=document.getElementById('tooltip');
-        const name = present(r?.name, regionName(feature.properties, regionId));
+        const name = displayRegionName(regionId, feature.properties);
         let tooltipText = `${name} · ${getLabel(regionId)}`;
         if(r && currentIndicator === 'cluster'){
           tooltipText += '\n' + `Emploi: ${pct(r.taux_emploi)}`;
@@ -696,8 +804,8 @@ async function buildMap(){
 
 function getLabel(id){
   const r=REGIONS[id];
-  if(!r) return REGION_NAME_FALLBACKS[id] || `Région ${id}`;
-  if(currentIndicator==='cluster') return present(r.cluster_label, CLUSTER_LABELS[r.cluster] || `Cluster ${present(r.cluster, 'N/D')}`);
+  if(!r) return displayRegionName(id);
+  if(currentIndicator==='cluster') return present(r.cluster_label, Number.isFinite(parseNumber(r.cluster)) ? `Cluster ${r.cluster}` : 'Data unavailable');
   if(currentIndicator==='taux_emploi') return pct(r.taux_emploi);
   if(currentIndicator==='niv_edu') return Number.isFinite(Number(r.niv_edu)) ? Number(r.niv_edu).toFixed(1)+'/6' : 'N/D';
   if(currentIndicator==='vuln') return pct(r.vuln);
@@ -708,8 +816,16 @@ function buildLegend(){
   const leg=document.getElementById('mapLegend');
   leg.innerHTML='';
   if(currentIndicator==='cluster'){
-    CLUSTER_LABELS.forEach((l,i)=>{
-      leg.innerHTML+=`<div class="legend-row"><div class="legend-swatch" style="background:${CLUSTER_COLORS[i]}"></div><span>${l}</span></div>`;
+    const clusterIds = Object.keys(CLUSTER_LABELS).length
+      ? Object.keys(CLUSTER_LABELS).map(Number).sort((a,b)=>a-b)
+      : [...new Set(Object.values(REGIONS).map(r=>parseNumber(r.cluster)).filter(Number.isFinite))].sort((a,b)=>a-b);
+    if(!clusterIds.length){
+      leg.innerHTML = '<div class="legend-row"><span>Data unavailable</span></div>';
+      return;
+    }
+    clusterIds.forEach(i=>{
+      const label = present(CLUSTER_LABELS[i], `Cluster ${i}`);
+      leg.innerHTML+=`<div class="legend-row"><div class="legend-swatch" style="background:${CLUSTER_COLORS[i] || '#ccc'}"></div><span>${escapeHTML(label)}</span></div>`;
     });
   } else {
     const stops = currentIndicator==='vuln'
@@ -730,43 +846,44 @@ function selectRegion(id){
   selectedRegion=id;
   const r=REGIONS[id];
   const d=document.getElementById('regionDetail');
-  if(!r){
-    d.innerHTML = `<div style="color:var(--red);font-size:11px;padding:1rem">Aucune donnée disponible pour ${REGION_NAME_FALLBACKS[id] || `Région ${id}`}.</div>`;
+  if(!r || !r.source_dashboard){
+    d.innerHTML = `<div style="color:var(--red);font-size:11px;padding:1rem">Aucune donnée statistique disponible pour ${escapeHTML(displayRegionName(id))}.</div>`;
     return;
   }
   const hasVuln = Number.isFinite(Number(r.vuln));
   const vuln = hasVuln ? Number(r.vuln) : null;
   const vulnColor=hasVuln && vuln>0.66?'var(--red)':hasVuln && vuln>0.40?'var(--amber)':'var(--teal)';
-  const tauxChomage = Number(r.taux_chomage);
+  const tauxChomage = parseNumber(r.taux_chomage);
   let detailHTML=`
     <div style="margin-bottom:1rem">
-      <div style="font-family:'Fraunces',serif;font-size:15px;color:var(--ink);margin-bottom:4px">${present(r.name, REGION_NAME_FALLBACKS[id] || `Région ${id}`)}</div>
-      <div style="font-size:10px;color:var(--ink3)">${present(r.cluster_label, CLUSTER_LABELS[r.cluster] || `Cluster ${present(r.cluster, 'N/D')}`)}</div>
+      <div style="font-family:'Fraunces',serif;font-size:15px;color:var(--ink);margin-bottom:4px">${escapeHTML(displayRegionName(id))}</div>
+      <div style="font-size:10px;color:var(--ink3)">${escapeHTML(present(r.cluster_label, Number.isFinite(parseNumber(r.cluster)) ? `Cluster ${r.cluster}` : 'Data unavailable'))}</div>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      ${statRow('Taux d\'emploi',pct(r.taux_emploi),num(r.taux_emploi,0.3),0.25,0.36,'var(--teal)')}`;
+      ${statRow('Taux d\'emploi',pct(r.taux_emploi),parseNumber(r.taux_emploi),0.25,0.36,'var(--teal)')}`;
   if(Number.isFinite(tauxChomage)){
-    detailHTML += `${statRow('Taux chômage',pct(tauxChomage),1-tauxChomage,0.1,0.4,'var(--red)')}`;
+    detailHTML += `${statRow('Taux chômage',pct(tauxChomage),tauxChomage,0.05,0.2,'var(--red)')}`;
   }
   detailHTML += `
-      ${statRow('Niveau éducation moyen',Number.isFinite(Number(r.niv_edu)) ? Number(r.niv_edu).toFixed(1)+' / 6' : 'N/D',num(r.niv_edu,2.5),2,3.5,'var(--blue)')}
-      ${statRow('Alphabétisme',pct(r.pct_alpha,0),num(r.pct_alpha,0.7),0.6,0.85,'var(--teal)')}
-      ${statRow('Ratio dépendance',pct(r.ratio_dep,0),1-num(r.ratio_dep,0.42),0.38,0.62,'var(--amber)')}
-      ${statRow('Score vulnérabilité moyen',hasVuln ? pct(vuln) : 'Data unavailable',hasVuln ? vuln : 0,0,1,vulnColor)}
+      ${statRow('Niveau éducation moyen',Number.isFinite(Number(r.niv_edu)) ? Number(r.niv_edu).toFixed(1)+' / 6' : 'N/D',parseNumber(r.niv_edu),2,3.5,'var(--blue)')}
+      ${statRow('Alphabétisme',pct(r.pct_alpha,0),parseNumber(r.pct_alpha),0.6,0.85,'var(--teal)')}
+      ${statRow('Ratio dépendance',pct(r.ratio_dep,0),parseNumber(r.ratio_dep),0.30,0.70,'var(--amber)')}
+      ${statRow('Score vulnérabilité moyen',hasVuln ? pct(vuln) : 'Data unavailable',vuln,0,1,vulnColor)}
     </div>
   `;
   d.innerHTML = detailHTML;
 }
 
 function statRow(label,val,norm,lo,hi,color){
-  const pct=Math.round(clamp((norm-lo)/(hi-lo),0,1)*100);
+  const n = parseNumber(norm);
+  const width = Number.isFinite(n) ? Math.round(clamp((n-lo)/(hi-lo),0,1)*100) : 0;
   return `<div>
     <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-      <span style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.4px">${label}</span>
-      <span style="font-size:11px;color:var(--ink);font-weight:500">${val}</span>
+      <span style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.4px">${escapeHTML(label)}</span>
+      <span style="font-size:11px;color:var(--ink);font-weight:500">${escapeHTML(val)}</span>
     </div>
     <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
-      <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width 0.4s ease"></div>
+      <div style="height:100%;width:${width}%;background:${color};border-radius:3px;transition:width 0.4s ease"></div>
     </div>
   </div>`;
 }
@@ -775,26 +892,32 @@ function showPage(id,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  btn.classList.add('active');
+  if(btn) btn.classList.add('active');
   if(id==='carte' && document.getElementById('marMap').children.length===0) buildMap();
 }
 
 function buildBarList(){
   const list=document.getElementById('barList');
-  const scored=Object.entries(REGIONS).filter(([,r])=>Number.isFinite(Number(r.vuln_score)));
-  if(!scored.length){
+  const top = (DASHBOARD_KPI?.top_regions_vulnerables || [])
+    .map(item=>({
+      id:regionIdFromRecord(item),
+      name:displayRegionName(regionIdFromRecord(item), item),
+      score:parseNumber(item.score_moyen),
+    }))
+    .filter(item=>item.id && Number.isFinite(item.score))
+    .sort((a,b)=>b.score-a.score);
+  if(!top.length){
     list.innerHTML='<div style="color:var(--ink3);font-size:11px;text-align:center;padding:2rem 0">Data unavailable</div>';
     return;
   }
-  const sorted=scored.sort((a,b)=>b[1].vuln_score-a[1].vuln_score).slice(0,6);
-  const max=Math.max(...sorted.map(([,r])=>r.vuln_score), 1);
-  list.innerHTML=sorted.map(([id,r])=>{
-    const width=Math.round(r.vuln_score/max*100);
-    const col=r.vuln_score>66?'#b83232':r.vuln_score>40?'#c47a1a':'#0d7f6e';
+  const max=Math.max(...top.map(r=>r.score), 1);
+  list.innerHTML=top.slice(0,6).map(r=>{
+    const width=Math.round(r.score/max*100);
+    const col=r.score>66?'#b83232':r.score>40?'#c47a1a':'#0d7f6e';
     return `<div class="bar-item">
       <div class="bar-meta">
-        <span class="bar-name">${r.name.split('-')[0].trim()}</span>
-        <span class="bar-val">${r.vuln_score.toFixed(1)}%</span>
+        <span class="bar-name">${escapeHTML(r.name.split('-')[0].trim())}</span>
+        <span class="bar-val">${r.score.toFixed(1)}%</span>
       </div>
       <div class="bar-track"><div class="bar-fill" style="width:${width}%;background:${col}"></div></div>
     </div>`;
@@ -802,25 +925,27 @@ function buildBarList(){
 }
 
 function buildFeatGrid(){
-  const feats=[
-    {name:'Milieu',val:0.47,color:'#0d7f6e'},
-    {name:'Emploi',val:0.18,color:'#1a5c9e'},
-    {name:'Handicap',val:0.17,color:'#c47a1a'},
-    {name:'Type activité',val:0.15,color:'#b83232'},
-    {name:'Éducation',val:0.15,color:'#7c3abd'},
-    {name:'Alphabétisme',val:0.08,color:'#0d7f6e'},
-  ];
-  document.getElementById('featGrid').innerHTML=feats.map(f=>`
+  const feats=(DASHBOARD_KPI?.modeles?.random_forest?.feature_importance || [])
+    .map((f,i)=>({name:f.feature, val:parseNumber(f.importance), color:FEATURE_COLORS[i % FEATURE_COLORS.length]}))
+    .filter(f=>f.name && Number.isFinite(f.val))
+    .slice(0,6);
+  const grid = document.getElementById('featGrid');
+  if(!feats.length){
+    grid.innerHTML='<div style="grid-column:1/-1;color:var(--ink3);font-size:11px;text-align:center;padding:2rem 0">Data unavailable</div>';
+    return;
+  }
+  const max = Math.max(...feats.map(f=>f.val), 1e-9);
+  grid.innerHTML=feats.map(f=>`
     <div class="feat-card">
-      <div class="feat-name">${f.name}</div>
-      <div class="feat-bar-wrap"><div class="feat-bar" style="width:${Math.round(f.val*100)}%;background:${f.color}"></div></div>
+      <div class="feat-name">${escapeHTML(f.name)}</div>
+      <div class="feat-bar-wrap"><div class="feat-bar" style="width:${Math.round(f.val/max*100)}%;background:${f.color}"></div></div>
       <div class="feat-val">${(f.val*100).toFixed(0)}%</div>
     </div>
   `).join('');
 }
 
 async function runSim(){
-  const reg=+document.getElementById('s-reg').value;
+  const reg=parseNumber(document.getElementById('s-reg').value);
   const mil=+document.getElementById('s-mil').value;
   const sexe=+document.getElementById('s-sexe').value;
   const age5=+document.getElementById('s-age').value;
@@ -829,6 +954,16 @@ async function runSim(){
   const sit_handicap=+document.getElementById('s-handi').value;
   const lir_ecr=+document.getElementById('s-lir').value;
   const resultBox=document.getElementById('simResult');
+
+  if(!Number.isFinite(reg)){
+    resultBox.innerHTML=`
+      <div class="sim-result" style="border-color:var(--red);background:var(--red-l);flex-direction:column;align-items:flex-start">
+        <div style="font-size:12px;color:var(--red);font-weight:600">Erreur de scoring</div>
+        <div style="font-size:11px;color:var(--ink2);line-height:1.45;margin-top:4px">La liste des régions est indisponible.</div>
+      </div>
+    `;
+    return;
+  }
 
   const payload={
     reg,
@@ -846,7 +981,7 @@ async function runSim(){
   resultBox.innerHTML=`<div style="color:var(--ink3);font-size:11px;text-align:center;padding:2rem 0">Calcul en cours...</div>`;
 
   try{
-    const res = await fetch(`${API_BASE}/predict/individu`,{
+    const res = await fetch(`${API_BASE}${ENDPOINTS.prediction}`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload)
@@ -865,23 +1000,24 @@ async function runSim(){
       throw new Error('Réponse API incomplète: classe ou score_continu manquant.');
     }
 
-    const labels=['Non vulnérable','Vulnérable','Très vulnérable'];
-    const colors=['var(--teal)','var(--amber)','var(--red)'];
-    const label=present(data.label, labels[classe] || `Classe ${classe}`);
-    const color=colors[classe] || 'var(--ink)';
+    const label=present(data.label, CLASS_LABELS[classe] || `Classe ${classe}`);
+    const color=CLASS_COLORS[classe] || 'var(--ink)';
     const probas=data.probas || {};
-    const p0=num(probas.non_vulnerable, 0);
-    const p1=num(probas.vulnerable, 0);
-    const p2=num(probas.tres_vulnerable, 0);
-    const tot=p0+p1+p2 || 1;
+    const p0=parseNumber(probas.non_vulnerable);
+    const p1=parseNumber(probas.vulnerable);
+    const p2=parseNumber(probas.tres_vulnerable);
+    if(!Number.isFinite(p0) || !Number.isFinite(p1) || !Number.isFinite(p2)){
+      throw new Error('Réponse API incomplète: probabilités manquantes.');
+    }
+    const tot=p0+p1+p2;
 
     resultBox.innerHTML=`
       <div class="sim-result" style="flex-direction:column;align-items:flex-start">
         <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
           <div class="sim-class" style="color:${color}">${classe}</div>
           <div>
-            <div style="font-size:14px;font-family:'Fraunces',serif;color:var(--ink)">${label}</div>
-            <div class="sim-detail">${present(data.model, 'XGBoost')} API · ${present(REGIONS[reg]?.name, REGION_NAME_FALLBACKS[reg] || 'Région '+reg)}</div>
+            <div style="font-size:14px;font-family:'Fraunces',serif;color:var(--ink)">${escapeHTML(label)}</div>
+            <div class="sim-detail">${escapeHTML(present(data.model, 'API'))} · ${escapeHTML(displayRegionName(reg))}</div>
           </div>
         </div>
         <div style="width:100%;font-size:10px;color:var(--ink3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Probabilités par classe</div>
@@ -918,30 +1054,108 @@ function probaBar(label,val,color){
   </div>`;
 }
 
-window.addEventListener('load', async()=>{
-  await initDashboard();
-  
-  new Chart(document.getElementById('donutChart'),{
+function destroyChart(canvasId){
+  if(CHARTS[canvasId]){
+    CHARTS[canvasId].destroy();
+    CHARTS[canvasId] = null;
+  }
+  const canvas = document.getElementById(canvasId);
+  const existing = canvas && window.Chart?.getChart ? Chart.getChart(canvas) : null;
+  if(existing) existing.destroy();
+}
+function showChartMessage(canvasId, message){
+  destroyChart(canvasId);
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  canvas.style.display = 'none';
+  const parent = canvas.parentElement;
+  let msg = parent.querySelector(`.chart-empty[data-chart="${canvasId}"]`);
+  if(!msg){
+    msg = document.createElement('div');
+    msg.className = 'chart-empty';
+    msg.dataset.chart = canvasId;
+    msg.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:11px;text-align:center;padding:1rem;pointer-events:none';
+    parent.appendChild(msg);
+  }
+  msg.textContent = message;
+}
+function clearChartMessage(canvasId){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  canvas.style.display = 'block';
+  canvas.style.visibility = 'visible';
+  const msg = canvas.parentElement.querySelector(`.chart-empty[data-chart="${canvasId}"]`);
+  if(msg) msg.remove();
+}
+function setDonutMissing(message){
+  destroyChart('donutChart');
+  clearChartMessage('donutChart');
+  const ring = document.getElementById('vulnRing');
+  const missing = document.getElementById('vulnMissing');
+  if(ring) ring.style.display = 'none';
+  if(missing){
+    missing.hidden = false;
+    missing.textContent = message;
+  }
+  setText('vulnTotal','—');
+  document.getElementById('vulnLegend').innerHTML='';
+}
+function clearDonutMissing(){
+  const ring = document.getElementById('vulnRing');
+  const missing = document.getElementById('vulnMissing');
+  if(ring) ring.style.display = 'flex';
+  if(missing){
+    missing.hidden = true;
+    missing.textContent = '';
+  }
+}
+function renderDonutChart(){
+  const vuln = DASHBOARD_KPI?.vulnerabilite_individuelle;
+  const values = [
+    parseNumber(vuln?.pct_non_vulnerable),
+    parseNumber(vuln?.pct_vulnerable),
+    parseNumber(vuln?.pct_tres_vulnerable),
+  ];
+  const hasData = values.every(Number.isFinite);
+  if(!hasData){
+    setDonutMissing('Scores individuels XGBoost indisponibles. Aucun fichier outputs/individu_scores.csv n’est chargé.');
+    return;
+  }
+  clearDonutMissing();
+  clearChartMessage('donutChart');
+  setText('vulnTotal', formatTotal(vuln.nb_individus, 'N/D'));
+  document.getElementById('vulnLegend').innerHTML=CLASS_LABELS.map((label,i)=>`
+    <div class="ring-item"><span class="ring-dot" style="background:${CLASS_COLORS[i]}"></span>${escapeHTML(label)} <b>${values[i].toFixed(1)}%</b></div>
+  `).join('');
+  destroyChart('donutChart');
+  CHARTS.donutChart = new Chart(document.getElementById('donutChart'),{
     type:'doughnut',
     data:{
-      labels:['Non vulnérable','Vulnérable','Très vulnérable'],
-      datasets:[{data:[33.9,35.0,31.1],backgroundColor:['#0d7f6e','#c47a1a','#b83232'],borderWidth:2,borderColor:'#fff'}]
+      labels:CLASS_LABELS,
+      datasets:[{data:values,backgroundColor:CLASS_COLORS,borderWidth:2,borderColor:'#fff'}]
     },
     options:{
       responsive:true,maintainAspectRatio:true,cutout:'68%',
       plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.label+': '+ctx.raw+'%'}}},
     }
   });
-
-  const scatterRegions=Object.values(REGIONS).filter(r=>Number.isFinite(Number(r.taux_emploi)) && Number.isFinite(Number(r.niv_edu)));
+}
+function renderScatterChart(){
+  const scatterRegions=Object.values(REGIONS).filter(r=>r.source_dashboard && Number.isFinite(Number(r.taux_emploi)) && Number.isFinite(Number(r.niv_edu)));
   const scatterData=scatterRegions.map(r=>({
     x:+(Number(r.taux_emploi)*100).toFixed(1),
     y:+Number(r.niv_edu).toFixed(2),
-    region:r.name,
+    region:displayRegionName(r.id),
   }));
+  if(!scatterData.length){
+    showChartMessage('scatterChart','Data unavailable');
+    return;
+  }
+  clearChartMessage('scatterChart');
   const xVals=scatterData.map(p=>p.x);
   const yVals=scatterData.map(p=>p.y);
-  new Chart(document.getElementById('scatterChart'),{
+  destroyChart('scatterChart');
+  CHARTS.scatterChart = new Chart(document.getElementById('scatterChart'),{
     type:'scatter',
     data:{datasets:[{
       label:'Régions',
@@ -972,30 +1186,56 @@ window.addEventListener('load', async()=>{
       }
     }
   });
-
-  new Chart(document.getElementById('modelChart'),{
+}
+function renderModelChart(){
+  const modeles = DASHBOARD_KPI?.modeles || {};
+  const xgb = XGB_MODEL_INFO || modeles.xgboost || {};
+  const datasets = [];
+  const metricKeys = MODEL_METRICS.map(([key])=>key);
+  const labels = MODEL_METRICS.map(([,label])=>label);
+  const addModel = (label, metrics, color)=>{
+    if(!metrics) return;
+    const values = metricKeys.map(key=>parseNumber(metrics[key]));
+    if(!values.some(Number.isFinite)) return;
+    datasets.push({label,data:values,backgroundColor:color+'99',borderColor:color,borderWidth:1});
+  };
+  addModel('Random Forest', modeles.random_forest?.metrics, '#0d7f6e');
+  addModel('XGBoost', xgb.metrics, '#1a5c9e');
+  if(!datasets.length){
+    showChartMessage('modelChart','Data unavailable');
+    return;
+  }
+  clearChartMessage('modelChart');
+  destroyChart('modelChart');
+  CHARTS.modelChart = new Chart(document.getElementById('modelChart'),{
     type:'bar',
-    data:{
-      labels:['Accuracy','F1 (weighted)','Précision','Rappel'],
-      datasets:[
-        {label:'Random Forest',data:[0.866,0.876,0.866,0.866],backgroundColor:'#0d7f6e99',borderColor:'#0d7f6e',borderWidth:1},
-        {label:'XGBoost',data:[0.998,0.998,0.998,0.998],backgroundColor:'#1a5c9e99',borderColor:'#1a5c9e',borderWidth:1},
-      ]
-    },
+    data:{labels,datasets},
     options:{
       responsive:true,maintainAspectRatio:false,
       plugins:{legend:{position:'top',labels:{font:{size:10},boxWidth:12}}},
-      scales:{y:{min:0.8,max:1.0,ticks:{font:{size:9}}},x:{ticks:{font:{size:9}}}},
+      scales:{y:{min:0,max:1.0,ticks:{font:{size:9}}},x:{ticks:{font:{size:9}}}},
     }
   });
-
-  new Chart(document.getElementById('xgbFeatChart'),{
+}
+function renderXgbFeatureChart(){
+  const xgb = XGB_MODEL_INFO || DASHBOARD_KPI?.modeles?.xgboost || {};
+  const feats=(xgb.feature_importance || [])
+    .map(f=>({feature:f.feature, gain:parseNumber(f.gain)}))
+    .filter(f=>f.feature && Number.isFinite(f.gain))
+    .slice(0,10);
+  if(!feats.length){
+    showChartMessage('xgbFeatChart', present(xgb.message, 'Données XGBoost indisponibles'));
+    return;
+  }
+  clearChartMessage('xgbFeatChart');
+  destroyChart('xgbFeatChart');
+  CHARTS.xgbFeatChart = new Chart(document.getElementById('xgbFeatChart'),{
     type:'bar',
     data:{
-      labels:['milieu','est_occupe','SIT_HANDICAP','TY_ACT','indice_scol','LIR_ECR','STAT_PROF','ACT_SECTEUR','NIV_ET_AGR','AGE5'],
+      labels:feats.map(f=>f.feature),
       datasets:[{
         label:'Gain moyen',
-        data:[25.4,17.7,17.1,15.1,14.7,8.2,7.5,7.1,6.4,5.5],
+        data:feats.map(f=>f.gain),
         backgroundColor:'#1a5c9e99',borderColor:'#1a5c9e',borderWidth:1,
       }]
     },
@@ -1005,7 +1245,25 @@ window.addEventListener('load', async()=>{
       scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9}}}},
     }
   });
-});
+}
+function renderAllCharts(){
+  renderDonutChart();
+  renderScatterChart();
+  renderModelChart();
+  renderXgbFeatureChart();
+}
+
+function getColor(regId, indicator){
+  const r=REGIONS[regId];
+  if(!r) return '#ccc';
+  if(indicator==='cluster') return CLUSTER_COLORS[r.cluster] || '#ccc';
+  if(indicator==='taux_emploi') return colorScale(parseNumber(r.taux_emploi),0.25,0.36,'#fdeaea','#0d7f6e');
+  if(indicator==='niv_edu') return colorScale(parseNumber(r.niv_edu),2.0,3.5,'#fdeaea','#1a5c9e');
+  if(indicator==='vuln') return colorScale(parseNumber(r.vuln),0.4,0.57,'#e1f5f0','#b83232');
+  return '#ccc';
+}
+
+window.addEventListener('load', initDashboard);
 </script>
 
 </body>

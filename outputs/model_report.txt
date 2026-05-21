@@ -1,0 +1,33 @@
+============================================================
+  RAPPORT D'ÉVALUATION — Random Forest
+  RGPH 2014 — Classification Ménages
+============================================================
+  Accuracy   : 0.8805
+  Precision  : 0.8801  (weighted)
+  Recall     : 0.8805  (weighted)
+  F1-Score   : 0.8802  (weighted)
+  OOB Score  : 0.8839
+
+  RAPPORT DÉTAILLÉ PAR CLASSE :
+                     precision    recall  f1-score   support
+
+ Non vulnérable (0)       0.88      0.91      0.89      1335
+     Vulnérable (1)       0.83      0.81      0.82      1333
+Très vulnérable (2)       0.93      0.93      0.93      1332
+
+           accuracy                           0.88      4000
+          macro avg       0.88      0.88      0.88      4000
+       weighted avg       0.88      0.88      0.88      4000
+
+
+  IMPORTANCE DES FEATURES (Top 10) :
+  milieu                         0.4816  ████████████████████████
+  ratio_dependance               0.1164  █████
+  indice_scol_moy                0.0741  ███
+  taux_activite                  0.0541  ██
+  ratio_emploi                   0.0523  ██
+  nb_chomeurs                    0.0313  █
+  age_moyen                      0.0288  █
+  nb_seniors                     0.0253  █
+  nb_occupes                     0.0211  █
+  province                       0.0199  

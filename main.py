@@ -7,6 +7,7 @@ Endpoints :
   GET  /regions                   → liste des 12 régions
   POST /predict/menage            → Random Forest (classification ménage)
   POST /predict/individu          → XGBoost (score vulnérabilité individuelle)
+  GET  /model/xgboost/feature-importance → état + importance XGBoost
   GET  /segmentation/regions      → K-Means (clusters régionaux)
   GET  /stats/region/{reg_id}     → profil statistique d'une région
   GET  /stats/dashboard           → KPIs globaux pour le dashboard
@@ -23,6 +24,7 @@ import pandas as pd
 import joblib
 import os
 import json
+import re
 from datetime import datetime
 
 # ──────────────────────────────────────────────────────────────
@@ -53,7 +55,16 @@ if os.path.isdir(static_dir):
 # CONSTANTES
 # ──────────────────────────────────────────────────────────────
 
-MODELS_DIR = os.environ.get("MODELS_DIR", "outputs/")
+MODELS_DIR = os.environ.get("MODELS_DIR", "models/")
+
+# S'assurer que le dossier existe localement pour éviter des erreurs au démarrage
+if not os.path.exists(MODELS_DIR):
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    # Si le dossier models est vide, on peut essayer de voir si les fichiers sont dans outputs
+    if MODELS_DIR == "models/" and os.path.exists("outputs/"):
+        print(f"[API] ℹ Dossier 'models/' vide, vérification de 'outputs/'")
+        # On ne change pas MODELS_DIR car Docker utilisera les mounts, 
+        # mais on informe au log.
 
 REGION_NAMES = {
     1:  "Tanger-Tétouan-Al Hoceïma",
@@ -223,6 +234,143 @@ def _regional_vulnerability_scores(df: pd.DataFrame) -> pd.Series:
     return scores
 
 
+def _read_output_text(filename: str) -> str:
+    path = os.path.join(MODELS_DIR, filename)
+    if not os.path.exists(path):
+        return ""
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        return fh.read()
+
+
+def _parse_float(pattern: str, text: str) -> Optional[float]:
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    return round(float(match.group(1)), 4) if match else None
+
+
+def _parse_model_reports() -> dict:
+    rf_text = _read_output_text("model_report.txt")
+    km_text = _read_output_text("kmeans_report.txt")
+    reports = {}
+
+    if rf_text:
+        rf_metrics = {
+            "accuracy": _parse_float(r"Accuracy\s*:\s*([0-9.]+)", rf_text),
+            "precision": _parse_float(r"Precision\s*:\s*([0-9.]+)", rf_text),
+            "recall": _parse_float(r"Recall\s*:\s*([0-9.]+)", rf_text),
+            "f1_weighted": _parse_float(r"F1-Score\s*:\s*([0-9.]+)", rf_text),
+            "oob_score": _parse_float(r"OOB Score\s*:\s*([0-9.]+)", rf_text),
+        }
+        feature_importance = []
+        in_features = False
+        for line in rf_text.splitlines():
+            if "IMPORTANCE DES FEATURES" in line:
+                in_features = True
+                continue
+            if not in_features:
+                continue
+            match = re.match(r"\s*([A-Za-z0-9_]+)\s+([0-9.]+)", line)
+            if match:
+                feature_importance.append({
+                    "feature": match.group(1),
+                    "importance": round(float(match.group(2)), 4),
+                })
+        reports["random_forest"] = {
+            "metrics": {k: v for k, v in rf_metrics.items() if v is not None},
+            "feature_importance": feature_importance,
+        }
+
+    reports["xgboost"] = _xgboost_model_info()
+
+
+    if km_text:
+        reports["kmeans"] = {
+            "metrics": {
+                "k": _parse_float(r"Nombre de clusters\s*:\s*([0-9.]+)", km_text),
+                "inertia": _parse_float(r"Inertie finale\s*:\s*([0-9.]+)", km_text),
+                "silhouette": _parse_float(r"Silhouette Score\s*:\s*([0-9.]+)", km_text),
+                "iterations": _parse_float(r"It[^\n:]*\s*:\s*([0-9.]+)", km_text),
+            }
+        }
+        reports["kmeans"]["metrics"] = {
+            k: v for k, v in reports["kmeans"]["metrics"].items() if v is not None
+        }
+
+    return reports
+
+
+def _parse_xgboost_report() -> dict:
+    xgb_text = _read_output_text("xgb_report.txt")
+    if not xgb_text:
+        return {"metrics": {}, "feature_importance": [], "report_available": False}
+
+    metrics = {
+        "accuracy": _parse_float(r"Accuracy\s*:\s*([0-9.]+)", xgb_text),
+        "f1_weighted": _parse_float(r"F1-Score\s*:\s*([0-9.]+)", xgb_text),
+        "auc_roc": _parse_float(r"ROC AUC \(OvR\)\s*:\s*([0-9.]+)", xgb_text),
+        "avg_precision": _parse_float(r"Avg Precision\s*:\s*([0-9.]+)", xgb_text),
+    }
+    feature_importance = []
+    in_features = False
+    for line in xgb_text.splitlines():
+        if "IMPORTANCE DES FEATURES" in line:
+            in_features = True
+            continue
+        if not in_features:
+            continue
+        match = re.match(r"\s*([A-Za-z0-9_]+)\s+([0-9.]+)\s+([0-9.]+)", line)
+        if match:
+            feature_importance.append({
+                "feature": match.group(1),
+                "gain": round(float(match.group(2)), 4),
+                "cover": round(float(match.group(3)), 4),
+                "source": "xgb_report.txt",
+            })
+
+    return {
+        "metrics": {k: v for k, v in metrics.items() if v is not None},
+        "feature_importance": feature_importance,
+        "report_available": True,
+    }
+
+
+def _xgboost_model_info() -> dict:
+    report = _parse_xgboost_report()
+    model_loaded = model_store.xgb_bundle is not None
+    info = {
+        "available": model_loaded or bool(report["metrics"]) or bool(report["feature_importance"]),
+        "model_loaded": model_loaded,
+        "report_available": report["report_available"],
+        "metrics": report["metrics"],
+        "feature_importance": report["feature_importance"],
+        "message": None,
+    }
+
+    if model_loaded and not info["feature_importance"]:
+        try:
+            xgb_model = model_store.xgb_bundle["model"]
+            booster = xgb_model.get_booster()
+            gains = booster.get_score(importance_type="gain")
+            covers = booster.get_score(importance_type="cover")
+            info["feature_importance"] = [
+                {
+                    "feature": feature,
+                    "gain": round(float(gain), 4),
+                    "cover": round(float(covers.get(feature, 0)), 4),
+                    "source": "xgb_individu_scorer.pkl",
+                }
+                for feature, gain in sorted(gains.items(), key=lambda item: item[1], reverse=True)
+            ]
+        except Exception as exc:
+            info["message"] = f"Importance XGBoost indisponible: {exc}"
+
+    if info["available"] and not info["message"]:
+        info["message"] = "Données XGBoost disponibles"
+    elif not info["available"]:
+        info["message"] = "Modèle XGBoost et rapport xgb_report.txt non disponibles"
+
+    return info
+
+
 @app.on_event("startup")
 async def startup_event():
     load_models()
@@ -321,6 +469,15 @@ async def get_regions():
             {"id": k, "nom": v} for k, v in REGION_NAMES.items()
         ]
     }
+
+
+@app.get("/model/xgboost/feature-importance", tags=["Modèles"])
+async def get_xgboost_feature_importance():
+    """
+    Retourne l'état du modèle XGBoost et son importance de variables.
+    Si le modèle ou le rapport n'existe pas, la réponse reste JSON et explicite.
+    """
+    return _xgboost_model_info()
 
 
 # ── Random Forest : classification ménage ────────────────────
@@ -564,6 +721,7 @@ async def get_dashboard_kpis():
     kpis = {
         "timestamp": datetime.now().isoformat(),
         "source":    "RGPH 2014 — HCP Maroc",
+        "modeles":   _parse_model_reports(),
     }
 
     # KPIs régionaux
@@ -571,6 +729,7 @@ async def get_dashboard_kpis():
         vuln_scores = _regional_vulnerability_scores(df)
         kpis["national"] = {
             "nb_regions":          len(df),
+            "population_totale":    int(df["population"].sum()) if "population" in df.columns else None,
             "age_moyen_national":  round(float(df["age_moyen"].mean()), 1) if "age_moyen" in df.columns else None,
             "taux_emploi_moyen":   round(float(df["taux_emploi"].mean()), 3) if "taux_emploi" in df.columns else None,
             "taux_chomage_moyen":  round(float(df["taux_chomage"].mean()), 3) if "taux_chomage" in df.columns else None,
@@ -585,13 +744,22 @@ async def get_dashboard_kpis():
         for idx, row in df.iterrows():
             reg_id = int(row.get("reg", 0))
             score = vuln_scores.loc[idx] if idx in vuln_scores.index else np.nan
-            regional.append({
+            region = {
                 "reg_id": reg_id,
                 "nom": str(row.get("region_label", row.get("profil_label", REGION_NAMES.get(reg_id, str(reg_id))))),
                 "taux_emploi": round(float(row["taux_emploi"]), 4) if "taux_emploi" in df.columns and pd.notna(row["taux_emploi"]) else None,
                 "niv_edu_moyen": round(float(row["niv_edu_moyen"]), 4) if "niv_edu_moyen" in df.columns and pd.notna(row["niv_edu_moyen"]) else None,
                 "score_vulnerabilite": round(float(score), 1) if pd.notna(score) else None,
-            })
+            }
+            for col in ["taux_chomage", "pct_alphabete", "ratio_dependance",
+                        "pct_handicap", "age_moyen", "pct_mineurs",
+                        "pct_seniors", "indice_scol_moyen",
+                        "taux_mortalite_proxy"]:
+                if col in df.columns:
+                    val = row[col]
+                    region[col] = round(float(val), 4) if pd.notna(val) else None
+            region["score_continu"] = round(float(score) / 100, 4) if pd.notna(score) else None
+            regional.append(region)
         kpis["regions"] = regional
 
         top = [r for r in regional if r["score_vulnerabilite"] is not None]
@@ -601,7 +769,6 @@ async def get_dashboard_kpis():
                 {"reg_id": r["reg_id"], "nom": r["nom"], "score_moyen": r["score_vulnerabilite"]}
                 for r in top[:6]
             ]
-
     # KPIs individuels
     if pred is not None and "classe_vuln_indiv" in pred.columns:
         dist = pred["classe_vuln_indiv"].value_counts(normalize=True).sort_index()

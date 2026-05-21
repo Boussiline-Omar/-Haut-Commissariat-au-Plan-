@@ -90,12 +90,12 @@ def load_and_etl(path: str) -> pd.DataFrame:
     transformé plus tard en package Python.
     """
     try:
-        from RGPH_projet.rgph_pipeline import (
+        from rgph_pipeline import (
             load_individu, run_etl,
             feature_engineering_individu, generate_synthetic_data
         )
     except ImportError:
-        from RGPH_projet.rgph_pipeline import (
+        from rgph_pipeline import (
             load_individu, run_etl,
             feature_engineering_individu, generate_synthetic_data
         )
