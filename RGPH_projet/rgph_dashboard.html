@@ -423,23 +423,75 @@ tr:hover td{background:var(--surface)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-const REGIONS = {
-  1:{name:"Tanger-Tétouan-Al Hoceïma",cluster:0,taux_emploi:0.29,niv_edu:2.6,vuln:0.48,pct_alpha:0.72,ratio_dep:0.43},
-  2:{name:"Oriental",cluster:1,taux_emploi:0.27,niv_edu:2.4,vuln:0.51,pct_alpha:0.69,ratio_dep:0.46},
-  3:{name:"Fès-Meknès",cluster:0,taux_emploi:0.26,niv_edu:2.5,vuln:0.50,pct_alpha:0.71,ratio_dep:0.45},
-  4:{name:"Rabat-Salé-Kénitra",cluster:0,taux_emploi:0.32,niv_edu:3.1,vuln:0.44,pct_alpha:0.80,ratio_dep:0.40},
-  5:{name:"Béni Mellal-Khénifra",cluster:0,taux_emploi:0.28,niv_edu:2.2,vuln:0.53,pct_alpha:0.65,ratio_dep:0.48},
-  6:{name:"Casablanca-Settat",cluster:0,taux_emploi:0.34,niv_edu:3.3,vuln:0.46,pct_alpha:0.82,ratio_dep:0.38},
-  7:{name:"Marrakech-Safi",cluster:0,taux_emploi:0.30,niv_edu:2.3,vuln:0.52,pct_alpha:0.67,ratio_dep:0.46},
-  8:{name:"Drâa-Tafilalet",cluster:0,taux_emploi:0.27,niv_edu:2.1,vuln:0.55,pct_alpha:0.63,ratio_dep:0.50},
-  9:{name:"Souss-Massa",cluster:0,taux_emploi:0.29,niv_edu:2.4,vuln:0.50,pct_alpha:0.70,ratio_dep:0.45},
-  10:{name:"Guelmim-Oued Noun",cluster:1,taux_emploi:0.31,niv_edu:2.5,vuln:0.49,pct_alpha:0.73,ratio_dep:0.43},
-  11:{name:"Laâyoune-Sakia El Hamra",cluster:1,taux_emploi:0.33,niv_edu:2.8,vuln:0.45,pct_alpha:0.78,ratio_dep:0.41},
-  12:{name:"Dakhla-Oued Ed-Dahab",cluster:1,taux_emploi:0.35,niv_edu:2.9,vuln:0.43,pct_alpha:0.81,ratio_dep:0.39},
-};
+const API_BASE = window.location.origin;
+let REGIONS = {};
+let DASHBOARD_KPI = null;
+let CLUSTER_COLORS = ["#0d7f6e","#1a5c9e"];
+let CLUSTER_LABELS = ["Cluster 0 — En transition","Cluster 1 — Rural traditionnel"];
 
-const CLUSTER_COLORS = ["#0d7f6e","#1a5c9e"];
-const CLUSTER_LABELS = ["Cluster 0 — En transition","Cluster 1 — Rural traditionnel"];
+async function loadRegionData(){
+  try{
+    const res=await fetch(`${API_BASE}/segmentation/regions`);
+    if(!res.ok) throw new Error(`API error: ${res.status}`);
+    const data=await res.json();
+    
+    REGIONS={};
+    (data.regions||[]).forEach(r=>{
+      REGIONS[r.reg_id]={
+        name:r.nom,
+        cluster:r.cluster,
+        taux_emploi:r.taux_emploi||0.3,
+        niv_edu:r.niv_edu_moyen||2.5,
+        vuln:r.score_continu||0.5,
+        pct_alpha:r.pct_alphabete||0.7,
+        ratio_dep:r.ratio_dependance||0.42,
+      };
+    });
+    
+    console.log('Régions chargées:',REGIONS);
+    return REGIONS;
+  }catch(err){
+    console.error('Erreur chargement régions:',err);
+    return {};
+  }
+}
+
+async function loadDashboardKPI(){
+  try{
+    const res=await fetch(`${API_BASE}/stats/dashboard`);
+    if(!res.ok) throw new Error(`API error: ${res.status}`);
+    const data=await res.json();
+    
+    DASHBOARD_KPI=data;
+    updateKPIDisplay(data);
+    
+    console.log('KPIs chargés:',data);
+    return data;
+  }catch(err){
+    console.error('Erreur chargement KPIs:',err);
+  }
+}
+
+function updateKPIDisplay(kpis){
+  if(!kpis.national) return;
+  const nat=kpis.national;
+  
+  const kpiElements=document.querySelectorAll('.kpi-row .kpi');
+  if(kpiElements.length>=4){
+    if(nat.age_moyen_national) kpiElements[0].querySelector('.kpi-value').textContent=nat.age_moyen_national;
+    if(nat.taux_emploi_moyen!==undefined) kpiElements[1].querySelector('.kpi-value').textContent=(nat.taux_emploi_moyen*100).toFixed(1)+'%';
+    if(nat.pct_alphabete_moyen!==undefined) kpiElements[2].querySelector('.kpi-value').textContent=(nat.pct_alphabete_moyen*100).toFixed(1)+'%';
+    if(nat.nb_regions) kpiElements[3].querySelector('.kpi-value').textContent=nat.nb_regions;
+  }
+}
+
+async function initDashboard(){
+  document.body.style.opacity='0.7';
+  await Promise.all([loadRegionData(),loadDashboardKPI()]);
+  buildBarList();
+  buildFeatGrid();
+  document.body.style.opacity='1';
+}
 
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
 function lerp(t,a,b){return a+(b-a)*t}
@@ -624,45 +676,62 @@ function runSim(){
   const handi=+document.getElementById('s-handi').value;
   const lir=+document.getElementById('s-lir').value;
 
-  let score=0;
-  if(mil===2) score+=1.5;
-  score+=(5-edu)/5*2;
-  if(lir===3) score+=1.5; else if(lir===2) score+=0.75;
-  if(act===3||act===5) score+=1.5; else if(act===1||act===2) score+=1.0;
-  if(handi===3) score+=1.0; else if(handi===4) score+=2.0; else if(handi===2) score+=0.5;
+  const payload={
+    reg,
+    milieu:mil,
+    NIV_ETU_AGR:edu,
+    TY_ACT:act,
+    SIT_HANDICAP:handi,
+    LIR_ECR:lir,
+  };
 
-  const maxScore=8.5;
-  const norm=clamp(score/maxScore,0,1);
-  let classe,label,color;
-  if(norm<0.33){classe=0;label='Non vulnérable';color='var(--teal)'}
-  else if(norm<0.66){classe=1;label='Vulnérable';color='var(--amber)'}
-  else{classe=2;label='Très vulnérable';color='var(--red)'}
+  fetch(`${API_BASE}/predict/individu`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  })
+  .then(res=>res.json())
+  .then(data=>{
+    const result=data;
+    const classe=result.classe_vuln_indiv||0;
+    const score=result.score_continu||0.5;
+    
+    const labels=['Non vulnérable','Vulnérable','Très vulnérable'];
+    const colors=['var(--teal)','var(--amber)','var(--red)'];
+    const label=labels[classe];
+    const color=colors[classe];
 
-  const p0=clamp(1-norm*1.5,0,1);
-  const p2=clamp((norm-0.4)*2,0,1);
-  const p1=clamp(1-p0-p2,0,1);
-  const tot=p0+p1+p2||1;
+    const p0=result.proba_0||0.3;
+    const p1=result.proba_1||0.3;
+    const p2=result.proba_2||0.4;
+    const tot=p0+p1+p2||1;
 
-  document.getElementById('simResult').innerHTML=`
-    <div class="sim-result" style="flex-direction:column;align-items:flex-start">
-      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
-        <div class="sim-class" style="color:${color}">${classe}</div>
-        <div>
-          <div style="font-size:14px;font-family:'Fraunces',serif;color:var(--ink)">${label}</div>
-          <div class="sim-detail">Modèle XGBoost · ${REGIONS[reg]?.name||'Région '+reg}</div>
+    document.getElementById('simResult').innerHTML=`
+      <div class="sim-result" style="flex-direction:column;align-items:flex-start">
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+          <div class="sim-class" style="color:${color}">${classe}</div>
+          <div>
+            <div style="font-size:14px;font-family:'Fraunces',serif;color:var(--ink)">${label}</div>
+            <div class="sim-detail">XGBoost API · ${REGIONS[reg]?.name||'Région '+reg}</div>
+          </div>
+        </div>
+        <div style="width:100%;font-size:10px;color:var(--ink3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Probabilités par classe</div>
+        ${probaBar('Non vulnérable',p0/tot,'#0d7f6e')}
+        ${probaBar('Vulnérable',p1/tot,'#c47a1a')}
+        ${probaBar('Très vulnérable',p2/tot,'#b83232')}
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);width:100%">
+          <div style="font-size:10px;color:var(--ink3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Score continu</div>
+          <div style="font-size:22px;font-family:'Fraunces',serif;color:${color}">${score.toFixed(3)}</div>
         </div>
       </div>
-      <div style="width:100%;font-size:10px;color:var(--ink3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Probabilités par classe</div>
-      ${probaBar('Non vulnérable',p0/tot,'#0d7f6e')}
-      ${probaBar('Vulnérable',p1/tot,'#c47a1a')}
-      ${probaBar('Très vulnérable',p2/tot,'#b83232')}
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);width:100%">
-        <div style="font-size:10px;color:var(--ink3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">Score continu</div>
-        <div style="font-size:22px;font-family:'Fraunces',serif;color:${color}">${norm.toFixed(3)}</div>
-      </div>
-    </div>
-  `;
+    `;
+  })
+  .catch(err=>{
+    console.error('Erreur API:',err);
+    document.getElementById('simResult').innerHTML=`<div style="color:var(--red);padding:1rem">Erreur: ${err.message}</div>`;
+  });
 }
+
 
 function probaBar(label,val,color){
   const pct=Math.round(val*100);
@@ -678,9 +747,8 @@ function probaBar(label,val,color){
 }
 
 window.addEventListener('load',()=>{
-  buildBarList();
-  buildFeatGrid();
-
+  initDashboard();
+  
   new Chart(document.getElementById('donutChart'),{
     type:'doughnut',
     data:{

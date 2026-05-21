@@ -1,21 +1,21 @@
 """
-=============================================================
   RGPH 2014 — Backend FastAPI
-  Projet : Système Analytique Intelligent (Soutenance)
-=============================================================
+  Projet : Système Analytique Intelligent 
 Endpoints :
-  GET  /                          → health check
+  GET  /                          → dashboard HTML
+  GET  /health                    → health check
   GET  /regions                   → liste des 12 régions
   POST /predict/menage            → Random Forest (classification ménage)
   POST /predict/individu          → XGBoost (score vulnérabilité individuelle)
   GET  /segmentation/regions      → K-Means (clusters régionaux)
   GET  /stats/region/{reg_id}     → profil statistique d'une région
   GET  /stats/dashboard           → KPIs globaux pour le dashboard
-=============================================================
 """
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
 import numpy as np
@@ -221,7 +221,16 @@ class IndividuInput(BaseModel):
 # ENDPOINTS
 # ──────────────────────────────────────────────────────────────
 
-@app.get("/", tags=["Système"])
+@app.get("/", tags=["Dashboard"])
+async def serve_dashboard():
+    """Serve the RGPH 2014 dashboard HTML."""
+    dashboard_path = os.path.join(os.path.dirname(__file__), "rgph_dashboard.html")
+    if not os.path.exists(dashboard_path):
+        raise HTTPException(404, "Dashboard file not found")
+    return FileResponse(dashboard_path, media_type="text/html")
+
+
+@app.get("/health", tags=["Système"])
 async def health_check():
     """Health check — état des modèles chargés."""
     return {

@@ -1,0 +1,21 @@
+🚀 QUICK START (30 secondes)
+
+1. Ouvrez CMD/Terminal dans RGPH_projet
+2. Tapez: python run_server.py 8000
+3. Ouvrez: http://localhost:8000/
+
+✅ DONE! Votre dashboard fonctionne!
+
+---
+
+📚 Lire après:
+• DEMARRAGE.txt (5 min)
+• CONNECTION_STATUS.md (10 min)
+
+🧪 Tester:
+python test_connection.py
+
+🐳 Docker:
+docker-compose up
+
+✨ Vous avez maintenant un dashboard complet avec backend FastAPI connecté!
