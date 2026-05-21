@@ -1,9 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard analytique RGPH 2014</title>
+<link rel="icon" href="data:,">
 
 <h2 class="sr-only">Dashboard analytique RGPH 2014 — Système d'analyse de vulnérabilité des régions marocaines</h2>
 <style>
@@ -70,8 +71,8 @@ body{font-family:'DM Mono',monospace;background:var(--surface);color:var(--ink);
 .card-title{font-size:11px;color:var(--ink2);letter-spacing:0.5px;text-transform:uppercase;font-weight:500}
 .card-body{padding:1.25rem}
 
-.map-wrap{position:relative;width:100%;padding-bottom:90%;background:var(--surface);border-radius:6px;overflow:hidden}
-.map-wrap svg{position:absolute;top:0;left:0;width:100%;height:100%}
+.map-wrap{position:relative;width:100%;aspect-ratio:0.8;background:var(--surface);border-radius:6px;overflow:hidden}
+.map-wrap svg{position:absolute;inset:0;width:100%;height:100%;display:block}
 
 .region-path{cursor:pointer;stroke:#fff;stroke-width:0.8;transition:opacity 0.15s}
 .region-path:hover{opacity:0.75;stroke-width:1.5}
@@ -265,7 +266,7 @@ tr:hover td{background:var(--surface)}
       </div>
       <div class="card-body" style="padding:0.75rem;position:relative">
         <div id="tooltip" class="tooltip"></div>
-        <svg id="marMap" viewBox="0 0 500 420" style="width:100%;display:block"></svg>
+        <svg id="marMap" viewBox="0 0 500 620" preserveAspectRatio="xMidYMid meet" style="width:100%;display:block"></svg>
       </div>
       <div class="legend" id="mapLegend"></div>
     </div>
@@ -421,30 +422,68 @@ tr:hover td{background:var(--surface)}
 
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="/static/vendor/chart.umd.js"></script>
 <script>
 const API_BASE = window.location.origin;
 let REGIONS = {};
 let DASHBOARD_KPI = null;
-let CLUSTER_COLORS = ["#0d7f6e","#1a5c9e"];
-let CLUSTER_LABELS = ["Cluster 0 — En transition","Cluster 1 — Rural traditionnel"];
+let CLUSTER_COLORS = ["#0d7f6e","#1a5c9e","#c47a1a","#7c3abd","#b83232","#2db8a0"];
+let CLUSTER_LABELS = ["Cluster 0","Cluster 1","Cluster 2","Cluster 3"];
+const REGION_NAME_FALLBACKS = {
+  1:"Tanger-Tétouan-Al Hoceïma", 2:"Oriental", 3:"Fès-Meknès",
+  4:"Rabat-Salé-Kénitra", 5:"Béni Mellal-Khénifra", 6:"Casablanca-Settat",
+  7:"Marrakech-Safi", 8:"Drâa-Tafilalet", 9:"Souss-Massa",
+  10:"Guelmim-Oued Noun", 11:"Laâyoune-Sakia El Hamra", 12:"Dakhla-Oued Ed-Dahab"
+};
+
+function present(value, fallback='N/D'){
+  return value === undefined || value === null || value === '' || Number.isNaN(value) ? fallback : value;
+}
+function num(value, fallback=0){
+  if(value === undefined || value === null || value === '') return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+function pct(value, digits=1, fallback='N/D'){
+  if(value === undefined || value === null || value === '') return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? (n*100).toFixed(digits)+'%' : fallback;
+}
+function regionName(raw, id){
+  return present(raw?.nom ?? raw?.name ?? raw?.region_label ?? raw?.profil_label ?? raw?.region_name, REGION_NAME_FALLBACKS[id] || `Région ${id}`);
+}
 
 async function loadRegionData(){
   try{
     const res=await fetch(`${API_BASE}/segmentation/regions`);
     if(!res.ok) throw new Error(`API error: ${res.status}`);
     const data=await res.json();
+    if(Array.isArray(data.clusters) && data.clusters.length){
+      data.clusters.forEach(c=>{
+        const id = num(c.cluster_id, 0);
+        CLUSTER_LABELS[id] = present(c.label, `Cluster ${id}`);
+      });
+    }
     
     REGIONS={};
     (data.regions||[]).forEach(r=>{
-      REGIONS[r.reg_id]={
-        name:r.nom,
-        cluster:r.cluster,
-        taux_emploi:r.taux_emploi||0.3,
-        niv_edu:r.niv_edu_moyen||2.5,
-        vuln:r.score_continu||0.5,
-        pct_alpha:r.pct_alphabete||0.7,
-        ratio_dep:r.ratio_dependance||0.42,
+      const id = num(r.reg_id ?? r.reg ?? r.id, 0);
+      if(!id) return;
+      const cluster = num(r.cluster, 0);
+      const vulnScore = num(r.score_vulnerabilite, null);
+      const vuln01 = num(r.score_continu, Number.isFinite(vulnScore) ? vulnScore/100 : null);
+      REGIONS[id]={
+        id,
+        name:regionName(r, id),
+        cluster,
+        cluster_label:present(r.cluster_label, CLUSTER_LABELS[cluster] || `Cluster ${cluster}`),
+        taux_emploi:num(r.taux_emploi, 0.3),
+        taux_chomage:r.taux_chomage,
+        niv_edu:num(r.niv_edu_moyen, 2.5),
+        vuln:vuln01,
+        vuln_score:vulnScore,
+        pct_alpha:num(r.pct_alphabete, 0.7),
+        ratio_dep:num(r.ratio_dependance, 0.42),
       };
     });
     
@@ -506,67 +545,162 @@ function lerpColor(t,c0,c1){const a=hexToRgb(c0),b=hexToRgb(c1);return rgbToHex(
 function getColor(regId, indicator){
   const r=REGIONS[regId];
   if(!r) return '#ccc';
-  if(indicator==='cluster') return CLUSTER_COLORS[r.cluster];
-  if(indicator==='taux_emploi') return colorScale(r.taux_emploi,0.25,0.36,'#fdeaea','#0d7f6e');
-  if(indicator==='niv_edu') return colorScale(r.niv_edu,2.0,3.5,'#fdeaea','#1a5c9e');
-  if(indicator==='vuln') return colorScale(r.vuln,0.4,0.57,'#e1f5f0','#b83232');
+  if(indicator==='cluster') return CLUSTER_COLORS[r.cluster] || '#ccc';
+  if(indicator==='taux_emploi') return colorScale(num(r.taux_emploi,0.3),0.25,0.36,'#fdeaea','#0d7f6e');
+  if(indicator==='niv_edu') return colorScale(num(r.niv_edu,2.5),2.0,3.5,'#fdeaea','#1a5c9e');
+  if(indicator==='vuln') return colorScale(num(r.vuln,0.5),0.4,0.57,'#e1f5f0','#b83232');
   return '#ccc';
 }
 
-const MAP_PATHS = {
-  1:"M 60 30 L 130 25 L 155 45 L 145 70 L 110 80 L 75 75 L 55 55 Z",
-  2:"M 130 25 L 210 20 L 230 50 L 215 80 L 175 90 L 145 70 L 155 45 Z",
-  3:"M 75 75 L 110 80 L 145 70 L 175 90 L 165 120 L 130 130 L 90 120 L 70 100 Z",
-  4:"M 40 75 L 75 75 L 70 100 L 90 120 L 75 145 L 40 140 L 25 110 Z",
-  5:"M 90 120 L 130 130 L 140 160 L 115 175 L 90 170 L 75 145 Z",
-  6:"M 20 140 L 40 140 L 75 145 L 90 170 L 75 195 L 45 200 L 20 185 Z",
-  7:"M 90 170 L 115 175 L 140 160 L 165 120 L 185 130 L 200 160 L 175 210 L 130 225 L 90 215 L 75 195 Z",
-  8:"M 140 160 L 165 120 L 215 80 L 245 100 L 270 135 L 260 175 L 220 200 L 185 200 L 175 210 L 200 160 Z",
-  9:"M 45 200 L 75 195 L 90 215 L 130 225 L 125 255 L 90 265 L 55 255 L 40 230 Z",
-  10:"M 40 230 L 55 255 L 90 265 L 85 295 L 55 305 L 30 285 L 25 260 Z",
-  11:"M 25 260 L 55 305 L 85 295 L 80 335 L 50 350 L 20 335 L 15 300 Z",
-  12:"M 20 335 L 50 350 L 80 335 L 75 380 L 45 390 L 15 375 Z",
+const MAP_GEOJSON_URL = '/static/data/morocco_regions.geojson';
+let MAP_GEOJSON = null;
+const REGION_ID_BY_NAME = {
+  'tangiertetouanalhoceima':1, 'tangertetouanalhoceima':1, 'tangertetouan':1,
+  'oriental':2,
+  'fezmeknes':3, 'fesmeknes':3,
+  'rabatsalekenitra':4, 'rabatsalekénitra':4,
+  'benimellalkhenifra':5, 'bénimellalkhénifra':5,
+  'casablancasettat':6,
+  'marrakechsafi':7,
+  'draatafilalet':8, 'drâatafilalet':8,
+  'soussmassa':9,
+  'guelmimouednoun':10,
+  'laayounesakiaelhamra':11, 'laâyounesakiaelhamra':11,
+  'dakhlaouededdahab':12
 };
 
 let selectedRegion = null;
 let currentIndicator = 'cluster';
 
-function buildMap(){
+function normalizeName(value){
+  return String(value || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+
+function featureRegionId(feature){
+  const props = feature?.properties || {};
+  const iso = props.shapeISO || props.iso_3166_2 || props.ISO3166_2 || props.code;
+  const match = String(iso || '').match(/(?:MA-)?(\d{1,2})$/i);
+  if(match) return Number(match[1]);
+  const nameKey = normalizeName(props.shapeName || props.name || props.nom || props.region_label || props.NAME_1);
+  return REGION_ID_BY_NAME[nameKey] || null;
+}
+
+async function loadMapGeoJSON(){
+  if(MAP_GEOJSON) return MAP_GEOJSON;
+  const res = await fetch(MAP_GEOJSON_URL);
+  if(!res.ok) throw new Error(`Map GeoJSON error: ${res.status}`);
+  MAP_GEOJSON = await res.json();
+  return MAP_GEOJSON;
+}
+
+function eachCoordinate(geometry, callback){
+  if(!geometry) return;
+  if(geometry.type === 'Polygon'){
+    geometry.coordinates.forEach(ring=>ring.forEach(callback));
+  } else if(geometry.type === 'MultiPolygon'){
+    geometry.coordinates.forEach(poly=>poly.forEach(ring=>ring.forEach(callback)));
+  }
+}
+
+function makeProjector(features, width, height){
+  const points=[];
+  features.forEach(f=>eachCoordinate(f.geometry, coord=>{
+    const lon=Number(coord[0]);
+    const lat=Number(coord[1]);
+    if(Number.isFinite(lon) && Number.isFinite(lat)){
+      const x=lon*Math.PI/180;
+      const y=Math.log(Math.tan(Math.PI/4 + (lat*Math.PI/180)/2));
+      points.push([x,y]);
+    }
+  }));
+  const xs=points.map(p=>p[0]);
+  const ys=points.map(p=>p[1]);
+  const minX=Math.min(...xs), maxX=Math.max(...xs);
+  const minY=Math.min(...ys), maxY=Math.max(...ys);
+  const pad=18;
+  const scale=Math.min((width-pad*2)/(maxX-minX), (height-pad*2)/(maxY-minY));
+  const offsetX=(width-(maxX-minX)*scale)/2;
+  const offsetY=(height-(maxY-minY)*scale)/2;
+  return ([lon,lat])=>{
+    const x=Number(lon)*Math.PI/180;
+    const y=Math.log(Math.tan(Math.PI/4 + (Number(lat)*Math.PI/180)/2));
+    return [offsetX+(x-minX)*scale, height-(offsetY+(y-minY)*scale)];
+  };
+}
+
+function ringToPath(ring, project){
+  return ring.map((coord,i)=>{
+    const [x,y]=project(coord);
+    return `${i===0?'M':'L'}${x.toFixed(2)} ${y.toFixed(2)}`;
+  }).join(' ') + ' Z';
+}
+
+function geometryToPath(geometry, project){
+  if(!geometry) return '';
+  if(geometry.type === 'Polygon') return geometry.coordinates.map(ring=>ringToPath(ring, project)).join(' ');
+  if(geometry.type === 'MultiPolygon') return geometry.coordinates.map(poly=>poly.map(ring=>ringToPath(ring, project)).join(' ')).join(' ');
+  return '';
+}
+
+async function buildMap(){
   const svg = document.getElementById('marMap');
   svg.innerHTML='';
-  Object.entries(MAP_PATHS).forEach(([id,d])=>{
-    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-    path.setAttribute('d',d);
-    path.setAttribute('fill',getColor(+id,currentIndicator));
-    path.setAttribute('class','region-path');
-    path.setAttribute('data-id',id);
-    path.addEventListener('mouseenter',e=>{
-      const r=REGIONS[+id];
-      const tt=document.getElementById('tooltip');
-      tt.textContent=r.name+' · '+getLabel(+id);
-      tt.style.opacity='1';
+  svg.setAttribute('viewBox','0 0 500 620');
+  try{
+    if(Object.keys(REGIONS).length === 0) await loadRegionData();
+    const geojson = await loadMapGeoJSON();
+    const features = (geojson.features || []).filter(f=>featureRegionId(f));
+    const project = makeProjector(features, 500, 620);
+    features.forEach(feature=>{
+      const regionId = featureRegionId(feature);
+      const r=REGIONS[regionId];
+      const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d', geometryToPath(feature.geometry, project));
+      path.setAttribute('fill', getColor(regionId,currentIndicator));
+      path.setAttribute('id','region-'+regionId);
+      path.setAttribute('class','region-path');
+      path.setAttribute('data-id',regionId);
+      path.setAttribute('data-name', present(r?.name, regionName(feature.properties, regionId)));
+      path.addEventListener('mouseenter',e=>{
+        const tt=document.getElementById('tooltip');
+        const name = present(r?.name, regionName(feature.properties, regionId));
+        let tooltipText = `${name} · ${getLabel(regionId)}`;
+        if(r && currentIndicator === 'cluster'){
+          tooltipText += '\n' + `Emploi: ${pct(r.taux_emploi)}`;
+          if(r.taux_chomage !== undefined && r.taux_chomage !== null) tooltipText += ` | Chômage: ${pct(r.taux_chomage)}`;
+          tooltipText += ` | Alphabète: ${pct(r.pct_alpha)}`;
+        }
+        tt.textContent = tooltipText;
+        tt.style.opacity='1';
+      });
+      path.addEventListener('mousemove',e=>{
+        const mapRect=svg.getBoundingClientRect();
+        const tt=document.getElementById('tooltip');
+        tt.style.left=(e.clientX-mapRect.left+10)+'px';
+        tt.style.top=(e.clientY-mapRect.top-30)+'px';
+      });
+      path.addEventListener('mouseleave',()=>{
+        document.getElementById('tooltip').style.opacity='0';
+      });
+      path.addEventListener('click',()=>selectRegion(regionId));
+      svg.appendChild(path);
     });
-    path.addEventListener('mousemove',e=>{
-      const mapRect=svg.getBoundingClientRect();
-      const tt=document.getElementById('tooltip');
-      tt.style.left=(e.clientX-mapRect.left+10)+'px';
-      tt.style.top=(e.clientY-mapRect.top-30)+'px';
-    });
-    path.addEventListener('mouseleave',()=>{
-      document.getElementById('tooltip').style.opacity='0';
-    });
-    path.addEventListener('click',()=>selectRegion(+id));
-    svg.appendChild(path);
-  });
-  buildLegend();
+    buildLegend();
+  }catch(err){
+    console.error('Erreur chargement carte:',err);
+    svg.innerHTML=`<text x="250" y="360" text-anchor="middle" fill="#b83232" style="font:12px sans-serif">Carte indisponible</text>`;
+  }
 }
 
 function getLabel(id){
   const r=REGIONS[id];
-  if(currentIndicator==='cluster') return CLUSTER_LABELS[r.cluster];
-  if(currentIndicator==='taux_emploi') return (r.taux_emploi*100).toFixed(1)+'%';
-  if(currentIndicator==='niv_edu') return r.niv_edu.toFixed(1)+'/6';
-  if(currentIndicator==='vuln') return (r.vuln*100).toFixed(1)+'%';
+  if(!r) return REGION_NAME_FALLBACKS[id] || `Région ${id}`;
+  if(currentIndicator==='cluster') return present(r.cluster_label, CLUSTER_LABELS[r.cluster] || `Cluster ${present(r.cluster, 'N/D')}`);
+  if(currentIndicator==='taux_emploi') return pct(r.taux_emploi);
+  if(currentIndicator==='niv_edu') return Number.isFinite(Number(r.niv_edu)) ? Number(r.niv_edu).toFixed(1)+'/6' : 'N/D';
+  if(currentIndicator==='vuln') return pct(r.vuln);
   return '';
 }
 
@@ -596,20 +730,32 @@ function selectRegion(id){
   selectedRegion=id;
   const r=REGIONS[id];
   const d=document.getElementById('regionDetail');
-  const vulnColor=r.vuln>0.52?'var(--red)':r.vuln>0.47?'var(--amber)':'var(--teal)';
-  d.innerHTML=`
+  if(!r){
+    d.innerHTML = `<div style="color:var(--red);font-size:11px;padding:1rem">Aucune donnée disponible pour ${REGION_NAME_FALLBACKS[id] || `Région ${id}`}.</div>`;
+    return;
+  }
+  const hasVuln = Number.isFinite(Number(r.vuln));
+  const vuln = hasVuln ? Number(r.vuln) : null;
+  const vulnColor=hasVuln && vuln>0.66?'var(--red)':hasVuln && vuln>0.40?'var(--amber)':'var(--teal)';
+  const tauxChomage = Number(r.taux_chomage);
+  let detailHTML=`
     <div style="margin-bottom:1rem">
-      <div style="font-family:'Fraunces',serif;font-size:15px;color:var(--ink);margin-bottom:4px">${r.name}</div>
-      <div style="font-size:10px;color:var(--ink3)">${CLUSTER_LABELS[r.cluster]}</div>
+      <div style="font-family:'Fraunces',serif;font-size:15px;color:var(--ink);margin-bottom:4px">${present(r.name, REGION_NAME_FALLBACKS[id] || `Région ${id}`)}</div>
+      <div style="font-size:10px;color:var(--ink3)">${present(r.cluster_label, CLUSTER_LABELS[r.cluster] || `Cluster ${present(r.cluster, 'N/D')}`)}</div>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      ${statRow('Taux d\'emploi',(r.taux_emploi*100).toFixed(1)+'%',r.taux_emploi,0.25,0.36,'var(--teal)')}
-      ${statRow('Niveau éducation moyen',r.niv_edu.toFixed(1)+' / 6',r.niv_edu,2,3.5,'var(--blue)')}
-      ${statRow('Alphabétisme',(r.pct_alpha*100).toFixed(0)+'%',r.pct_alpha,0.6,0.85,'var(--teal)')}
-      ${statRow('Ratio dépendance',(r.ratio_dep*100).toFixed(0)+'%',1-r.ratio_dep,0.38,0.62,'var(--amber)')}
-      ${statRow('Score vulnérabilité moyen',(r.vuln*100).toFixed(1)+'%',1-r.vuln,0.42,0.58,vulnColor)}
+      ${statRow('Taux d\'emploi',pct(r.taux_emploi),num(r.taux_emploi,0.3),0.25,0.36,'var(--teal)')}`;
+  if(Number.isFinite(tauxChomage)){
+    detailHTML += `${statRow('Taux chômage',pct(tauxChomage),1-tauxChomage,0.1,0.4,'var(--red)')}`;
+  }
+  detailHTML += `
+      ${statRow('Niveau éducation moyen',Number.isFinite(Number(r.niv_edu)) ? Number(r.niv_edu).toFixed(1)+' / 6' : 'N/D',num(r.niv_edu,2.5),2,3.5,'var(--blue)')}
+      ${statRow('Alphabétisme',pct(r.pct_alpha,0),num(r.pct_alpha,0.7),0.6,0.85,'var(--teal)')}
+      ${statRow('Ratio dépendance',pct(r.ratio_dep,0),1-num(r.ratio_dep,0.42),0.38,0.62,'var(--amber)')}
+      ${statRow('Score vulnérabilité moyen',hasVuln ? pct(vuln) : 'Data unavailable',hasVuln ? vuln : 0,0,1,vulnColor)}
     </div>
   `;
+  d.innerHTML = detailHTML;
 }
 
 function statRow(label,val,norm,lo,hi,color){
@@ -634,18 +780,23 @@ function showPage(id,btn){
 }
 
 function buildBarList(){
-  const sorted=Object.entries(REGIONS).sort((a,b)=>b[1].vuln-a[1].vuln).slice(0,6);
-  const max=sorted[0][1].vuln;
   const list=document.getElementById('barList');
+  const scored=Object.entries(REGIONS).filter(([,r])=>Number.isFinite(Number(r.vuln_score)));
+  if(!scored.length){
+    list.innerHTML='<div style="color:var(--ink3);font-size:11px;text-align:center;padding:2rem 0">Data unavailable</div>';
+    return;
+  }
+  const sorted=scored.sort((a,b)=>b[1].vuln_score-a[1].vuln_score).slice(0,6);
+  const max=Math.max(...sorted.map(([,r])=>r.vuln_score), 1);
   list.innerHTML=sorted.map(([id,r])=>{
-    const pct=Math.round(r.vuln/max*100);
-    const col=r.vuln>0.52?'#b83232':r.vuln>0.47?'#c47a1a':'#0d7f6e';
+    const width=Math.round(r.vuln_score/max*100);
+    const col=r.vuln_score>66?'#b83232':r.vuln_score>40?'#c47a1a':'#0d7f6e';
     return `<div class="bar-item">
       <div class="bar-meta">
         <span class="bar-name">${r.name.split('-')[0].trim()}</span>
-        <span class="bar-val">${(r.vuln*100).toFixed(1)}%</span>
+        <span class="bar-val">${r.vuln_score.toFixed(1)}%</span>
       </div>
-      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${col}"></div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${width}%;background:${col}"></div></div>
     </div>`;
   }).join('');
 }
@@ -668,51 +819,69 @@ function buildFeatGrid(){
   `).join('');
 }
 
-function runSim(){
+async function runSim(){
   const reg=+document.getElementById('s-reg').value;
   const mil=+document.getElementById('s-mil').value;
-  const edu=+document.getElementById('s-edu').value;
-  const act=+document.getElementById('s-act').value;
-  const handi=+document.getElementById('s-handi').value;
-  const lir=+document.getElementById('s-lir').value;
+  const sexe=+document.getElementById('s-sexe').value;
+  const age5=+document.getElementById('s-age').value;
+  const niv_et_agr=+document.getElementById('s-edu').value;
+  const ty_act=+document.getElementById('s-act').value;
+  const sit_handicap=+document.getElementById('s-handi').value;
+  const lir_ecr=+document.getElementById('s-lir').value;
+  const resultBox=document.getElementById('simResult');
 
   const payload={
     reg,
-    milieu:mil,
-    NIV_ETU_AGR:edu,
-    TY_ACT:act,
-    SIT_HANDICAP:handi,
-    LIR_ECR:lir,
+    mil,
+    sexe,
+    age5,
+    niv_et_agr,
+    lir_ecr,
+    ty_act,
+    sit_handicap,
+    enf_viv:null,
+    enf_dec:null,
   };
 
-  fetch(`${API_BASE}/predict/individu`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(payload)
-  })
-  .then(res=>res.json())
-  .then(data=>{
-    const result=data;
-    const classe=result.classe_vuln_indiv||0;
-    const score=result.score_continu||0.5;
-    
+  resultBox.innerHTML=`<div style="color:var(--ink3);font-size:11px;text-align:center;padding:2rem 0">Calcul en cours...</div>`;
+
+  try{
+    const res = await fetch(`${API_BASE}/predict/individu`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok){
+      const detail = Array.isArray(data.detail)
+        ? data.detail.map(d=>`${(d.loc||[]).join('.')}: ${d.msg}`).join(' | ')
+        : (data.detail || data.message || `HTTP ${res.status}`);
+      throw new Error(detail);
+    }
+
+    const classe=Number(data.classe);
+    const score=Number(data.score_continu);
+    if(!Number.isFinite(classe) || !Number.isFinite(score)){
+      throw new Error('Réponse API incomplète: classe ou score_continu manquant.');
+    }
+
     const labels=['Non vulnérable','Vulnérable','Très vulnérable'];
     const colors=['var(--teal)','var(--amber)','var(--red)'];
-    const label=labels[classe];
-    const color=colors[classe];
+    const label=present(data.label, labels[classe] || `Classe ${classe}`);
+    const color=colors[classe] || 'var(--ink)';
+    const probas=data.probas || {};
+    const p0=num(probas.non_vulnerable, 0);
+    const p1=num(probas.vulnerable, 0);
+    const p2=num(probas.tres_vulnerable, 0);
+    const tot=p0+p1+p2 || 1;
 
-    const p0=result.proba_0||0.3;
-    const p1=result.proba_1||0.3;
-    const p2=result.proba_2||0.4;
-    const tot=p0+p1+p2||1;
-
-    document.getElementById('simResult').innerHTML=`
+    resultBox.innerHTML=`
       <div class="sim-result" style="flex-direction:column;align-items:flex-start">
         <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
           <div class="sim-class" style="color:${color}">${classe}</div>
           <div>
             <div style="font-size:14px;font-family:'Fraunces',serif;color:var(--ink)">${label}</div>
-            <div class="sim-detail">XGBoost API · ${REGIONS[reg]?.name||'Région '+reg}</div>
+            <div class="sim-detail">${present(data.model, 'XGBoost')} API · ${present(REGIONS[reg]?.name, REGION_NAME_FALLBACKS[reg] || 'Région '+reg)}</div>
           </div>
         </div>
         <div style="width:100%;font-size:10px;color:var(--ink3);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Probabilités par classe</div>
@@ -725,13 +894,16 @@ function runSim(){
         </div>
       </div>
     `;
-  })
-  .catch(err=>{
+  }catch(err){
     console.error('Erreur API:',err);
-    document.getElementById('simResult').innerHTML=`<div style="color:var(--red);padding:1rem">Erreur: ${err.message}</div>`;
-  });
+    resultBox.innerHTML=`
+      <div class="sim-result" style="border-color:var(--red);background:var(--red-l);flex-direction:column;align-items:flex-start">
+        <div style="font-size:12px;color:var(--red);font-weight:600">Erreur de scoring</div>
+        <div style="font-size:11px;color:var(--ink2);line-height:1.45;margin-top:4px">${present(err.message, 'La prédiction a échoué.')}</div>
+      </div>
+    `;
+  }
 }
-
 
 function probaBar(label,val,color){
   const pct=Math.round(val*100);
@@ -746,8 +918,8 @@ function probaBar(label,val,color){
   </div>`;
 }
 
-window.addEventListener('load',()=>{
-  initDashboard();
+window.addEventListener('load', async()=>{
+  await initDashboard();
   
   new Chart(document.getElementById('donutChart'),{
     type:'doughnut',
@@ -761,24 +933,42 @@ window.addEventListener('load',()=>{
     }
   });
 
-  const scatterData=Object.values(REGIONS).map(r=>({x:+(r.taux_emploi*100).toFixed(1),y:+r.niv_edu.toFixed(2)}));
-  const scatterLabels=Object.values(REGIONS).map(r=>r.name.split('-')[0].trim());
+  const scatterRegions=Object.values(REGIONS).filter(r=>Number.isFinite(Number(r.taux_emploi)) && Number.isFinite(Number(r.niv_edu)));
+  const scatterData=scatterRegions.map(r=>({
+    x:+(Number(r.taux_emploi)*100).toFixed(1),
+    y:+Number(r.niv_edu).toFixed(2),
+    region:r.name,
+  }));
+  const xVals=scatterData.map(p=>p.x);
+  const yVals=scatterData.map(p=>p.y);
   new Chart(document.getElementById('scatterChart'),{
     type:'scatter',
     data:{datasets:[{
       label:'Régions',
       data:scatterData,
-      backgroundColor:Object.values(REGIONS).map(r=>CLUSTER_COLORS[r.cluster]+'cc'),
+      backgroundColor:scatterRegions.map(r=>(CLUSTER_COLORS[r.cluster] || '#0d7f6e')+'cc'),
+      borderColor:'#fff',
+      borderWidth:1,
       pointRadius:7,pointHoverRadius:9,
     }]},
     options:{
       responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{
-        label:ctx=>{const l=scatterLabels[ctx.dataIndex];return l+' ('+ctx.raw.x+'%, niv '+ctx.raw.y+')';}
+        label:ctx=>`${ctx.raw.region}: emploi ${ctx.raw.x.toFixed(1)}%, éducation ${ctx.raw.y.toFixed(2)}`
       }}},
       scales:{
-        x:{title:{display:true,text:'Taux emploi (%)',font:{size:10}},min:24,max:37,ticks:{font:{size:9}}},
-        y:{title:{display:true,text:'Niveau éducation',font:{size:10}},min:1.8,max:3.6,ticks:{font:{size:9}}},
+        x:{
+          title:{display:true,text:'Taux emploi (%)',font:{size:10}},
+          suggestedMin:Math.max(0, Math.floor(Math.min(...xVals)-3)),
+          suggestedMax:Math.ceil(Math.max(...xVals)+3),
+          ticks:{font:{size:9}}
+        },
+        y:{
+          title:{display:true,text:'Niveau éducation',font:{size:10}},
+          suggestedMin:Math.max(0, Math.floor((Math.min(...yVals)-0.3)*10)/10),
+          suggestedMax:Math.ceil((Math.max(...yVals)+0.3)*10)/10,
+          ticks:{font:{size:9}}
+        },
       }
     }
   });

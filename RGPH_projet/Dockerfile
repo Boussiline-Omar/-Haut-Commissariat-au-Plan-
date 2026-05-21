@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copier l'application
 COPY main.py .
 COPY rgph_dashboard.html .
+COPY static/ static/
 COPY outputs/ outputs/
 
 # Exposer le port

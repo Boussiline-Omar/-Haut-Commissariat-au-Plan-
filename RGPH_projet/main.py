@@ -1,4 +1,4 @@
-"""
+﻿"""
   RGPH 2014 — Backend FastAPI
   Projet : Système Analytique Intelligent 
 Endpoints :
@@ -44,6 +44,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # ──────────────────────────────────────────────────────────────
 # CONSTANTES
@@ -155,6 +159,68 @@ def _mock_regional_profiles() -> pd.DataFrame:
             ]),
         })
     return pd.DataFrame(rows)
+
+
+def _normalize_risk(series: pd.Series, higher_is_risk: bool) -> pd.Series:
+    values = pd.to_numeric(series, errors="coerce")
+    valid = values.dropna()
+    if valid.empty:
+        return pd.Series(np.nan, index=series.index)
+
+    lo = float(valid.min())
+    hi = float(valid.max())
+    if np.isclose(lo, hi):
+        return pd.Series(0.5, index=series.index)
+
+    normalized = (values - lo) / (hi - lo)
+    if not higher_is_risk:
+        normalized = 1 - normalized
+    return normalized.clip(0, 1)
+
+
+def _existing_vulnerability_scores(df: pd.DataFrame) -> Optional[pd.Series]:
+    for col in ["score_vulnerabilite", "vulnerability_score", "score_vulnerability"]:
+        if col in df.columns:
+            scores = pd.to_numeric(df[col], errors="coerce")
+            if scores.dropna().nunique() > 1:
+                return scores.clip(0, 100)
+
+    for col in ["score_continu", "vuln", "vulnerability"]:
+        if col in df.columns:
+            scores = pd.to_numeric(df[col], errors="coerce")
+            if scores.dropna().nunique() > 1:
+                if scores.dropna().max() <= 1:
+                    scores = scores * 100
+                return scores.clip(0, 100)
+
+    return None
+
+
+def _regional_vulnerability_scores(df: pd.DataFrame) -> pd.Series:
+    existing = _existing_vulnerability_scores(df)
+    if existing is not None:
+        return existing.round(1)
+
+    factors = [
+        ("taux_chomage", 0.25, True),
+        ("ratio_dependance", 0.20, True),
+        ("pct_alphabete", 0.20, False),
+        ("taux_emploi", 0.20, False),
+        ("niv_edu_moyen", 0.15, False),
+    ]
+
+    weighted = pd.Series(0.0, index=df.index, dtype=float)
+    total_weight = pd.Series(0.0, index=df.index, dtype=float)
+    for col, weight, higher_is_risk in factors:
+        if col not in df.columns:
+            continue
+        risk = _normalize_risk(df[col], higher_is_risk)
+        has_value = risk.notna()
+        weighted.loc[has_value] += risk.loc[has_value] * weight
+        total_weight.loc[has_value] += weight
+
+    scores = (weighted / total_weight.replace(0, np.nan) * 100).round(1)
+    return scores
 
 
 @app.on_event("startup")
@@ -411,9 +477,10 @@ async def get_regional_segmentation():
         raise HTTPException(503, "Données régionales non disponibles")
 
     df = model_store.regional_df
+    vuln_scores = _regional_vulnerability_scores(df)
 
     regions = []
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         region = {
             "reg_id":        int(row.get("reg", 0)),
             "nom":           str(row.get("region_label", row.get("profil_label", ""))),
@@ -428,6 +495,9 @@ async def get_regional_segmentation():
             if col in row:
                 val = row[col]
                 region[col] = round(float(val), 4) if pd.notna(val) else None
+        score = vuln_scores.loc[idx] if idx in vuln_scores.index else np.nan
+        region["score_vulnerabilite"] = round(float(score), 1) if pd.notna(score) else None
+        region["score_continu"] = round(float(score) / 100, 4) if pd.notna(score) else None
         regions.append(region)
 
     # Résumé par cluster
@@ -498,6 +568,7 @@ async def get_dashboard_kpis():
 
     # KPIs régionaux
     if df is not None:
+        vuln_scores = _regional_vulnerability_scores(df)
         kpis["national"] = {
             "nb_regions":          len(df),
             "age_moyen_national":  round(float(df["age_moyen"].mean()), 1) if "age_moyen" in df.columns else None,
@@ -509,6 +580,27 @@ async def get_dashboard_kpis():
         }
         if "cluster" in df.columns:
             kpis["national"]["nb_clusters"] = int(df["cluster"].nunique())
+
+        regional = []
+        for idx, row in df.iterrows():
+            reg_id = int(row.get("reg", 0))
+            score = vuln_scores.loc[idx] if idx in vuln_scores.index else np.nan
+            regional.append({
+                "reg_id": reg_id,
+                "nom": str(row.get("region_label", row.get("profil_label", REGION_NAMES.get(reg_id, str(reg_id))))),
+                "taux_emploi": round(float(row["taux_emploi"]), 4) if "taux_emploi" in df.columns and pd.notna(row["taux_emploi"]) else None,
+                "niv_edu_moyen": round(float(row["niv_edu_moyen"]), 4) if "niv_edu_moyen" in df.columns and pd.notna(row["niv_edu_moyen"]) else None,
+                "score_vulnerabilite": round(float(score), 1) if pd.notna(score) else None,
+            })
+        kpis["regions"] = regional
+
+        top = [r for r in regional if r["score_vulnerabilite"] is not None]
+        top.sort(key=lambda item: item["score_vulnerabilite"], reverse=True)
+        if top:
+            kpis["top_regions_vulnerables"] = [
+                {"reg_id": r["reg_id"], "nom": r["nom"], "score_moyen": r["score_vulnerabilite"]}
+                for r in top[:6]
+            ]
 
     # KPIs individuels
     if pred is not None and "classe_vuln_indiv" in pred.columns:
@@ -529,7 +621,7 @@ async def get_dashboard_kpis():
             )
             kpis["top_regions_vulnerables"] = [
                 {"reg_id": int(r), "nom": REGION_NAMES.get(r, str(r)),
-                 "score_moyen": round(float(s), 4)}
+                 "score_moyen": round(float(s) * 100, 1)}
                 for r, s in top_vuln.items()
             ]
 
