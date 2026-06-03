@@ -1,0 +1,45 @@
+RAPPORT STATISTIQUE AVANCE - RGPH 2014
+============================================================
+Nombre d'individus analyses: 99,962
+Nombre de colonnes: 54
+
+Colonnes detectees:
+- region: reg
+- province: pro
+- milieu: mil
+- menage_id: MEN_PRO
+- ordre_menage: NOR_MEN
+- lien_cm: LIEN_CM
+- sexe: sexe
+- age5: AGE5
+- age1: AGE1
+- alphab: LIR_ECR
+- educ: NIV_ET_AGR
+- educ_detail: NIV_ET
+- scolarise: scol
+- diplome: EG_DIP_GG_DET
+- formation_pro: FP_DIP_GG
+- ty_act: TY_ACT
+- stat_prof: STAT_PROF
+- secteur: ACT_SECTEUR
+- sit_handicap: SIT_HANDICAP
+- handi_vis: HANDI_VIS
+- handi_aud: HANDI_AUD
+- handi_mob: HANDI_MOB
+- handi_mem: HANDI_MEM
+- handi_entr: HANDI_ENTR
+- handi_com: HANDI_COM
+- enf_viv: ENF_VIV
+- enf_dec: ENF_DEC
+
+Tests statistiques:
+- Chi-square: milieu vs classe_vulnerabilite: p-value=0; Relation statistiquement significative au seuil 5%.
+- Chi-square: sexe vs classe_vulnerabilite: p-value=0.560079; Pas de preuve statistique suffisante au seuil 5%.
+- Kruskal-Wallis: score de vulnerabilite entre regions: p-value=0.130863; Pas de preuve statistique suffisante au seuil 5%.
+- Shapiro: normalite du score proxy sur echantillon: p-value=1.99422e-08; Relation statistiquement significative au seuil 5%.
+
+Clusters statistiques regionaux:
+                     age_moyen  pct_mineurs  pct_seniors  pct_alphabete  niv_edu_moyen  indice_scolarisation_moyen  taux_emploi  taux_chomage  pct_handicap  ratio_dependance  score_vulnerabilite_moyen
+cluster_statistique                                                                                                                                                                                     
+0                       37.373       18.951       24.897         44.230          2.499                       0.520        0.284         0.082         0.471             0.438                      4.013
+1                       37.587       18.778       25.277         43.394          2.479                       0.517        0.283         0.081         0.465             0.441                      4.044

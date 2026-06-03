@@ -55,7 +55,10 @@ if os.path.isdir(static_dir):
 # CONSTANTES
 # ──────────────────────────────────────────────────────────────
 
-MODELS_DIR = os.environ.get("MODELS_DIR", "models/")
+APP_DIR = os.path.dirname(__file__)
+MODELS_DIR = os.environ.get("MODELS_DIR", os.path.join(APP_DIR, "models"))
+OUTPUTS_DIR = os.environ.get("OUTPUTS_DIR", os.path.join(APP_DIR, "outputs"))
+OFFICIAL_RGPH_POPULATION = 33_800_000
 
 # S'assurer que le dossier existe localement pour éviter des erreurs au démarrage
 if not os.path.exists(MODELS_DIR):
@@ -65,6 +68,60 @@ if not os.path.exists(MODELS_DIR):
         print(f"[API] ℹ Dossier 'models/' vide, vérification de 'outputs/'")
         # On ne change pas MODELS_DIR car Docker utilisera les mounts, 
         # mais on informe au log.
+
+
+def _first_existing_path(*paths: str) -> str:
+    for path in paths:
+        if os.path.exists(path):
+            return path
+    return paths[0]
+
+
+def _format_population_millions(value: Optional[float]) -> Optional[str]:
+    if value is None or not np.isfinite(value):
+        return None
+    return f"{value / 1_000_000:.1f}M".replace(".", ",")
+
+
+def _individu_csv_path() -> str:
+    return _first_existing_path(
+        os.path.join(APP_DIR, "Individu.csv"),
+        os.path.join(OUTPUTS_DIR, "Individu.csv"),
+        os.path.join(MODELS_DIR, "Individu.csv"),
+    )
+
+
+def _get_individu_population_summary() -> dict:
+    path = _individu_csv_path()
+    summary = {
+        "population_representee": OFFICIAL_RGPH_POPULATION,
+        "population_source": "constante_officielle",
+        "echantillon_analyse": None,
+    }
+
+    if not os.path.exists(path):
+        return summary
+
+    try:
+        columns = pd.read_csv(path, nrows=0).columns
+        if "pds" in columns:
+            pds = pd.to_numeric(pd.read_csv(path, usecols=["pds"])["pds"], errors="coerce")
+            # La population représentée RGPH utilise le poids de sondage pds ou une constante officielle. Le nombre de lignes du fichier n’est pas la population totale.
+            population_pds = int(round(float(pds.sum(skipna=True))))
+            if population_pds >= 10_000_000:
+                summary["population_representee"] = population_pds
+                summary["population_source"] = "pds"
+            else:
+                summary["population_representee"] = OFFICIAL_RGPH_POPULATION
+                summary["population_source"] = "constante_officielle"
+            summary["echantillon_analyse"] = int(len(pds))
+        elif len(columns):
+            sample = pd.read_csv(path, usecols=[columns[0]])
+            summary["echantillon_analyse"] = int(len(sample))
+    except Exception as exc:
+        print(f"[API] ⚠ Résumé Individu.csv indisponible ({path}): {exc}")
+
+    return summary
 
 REGION_NAMES = {
     1:  "Tanger-Tétouan-Al Hoceïma",
@@ -103,27 +160,51 @@ model_store = ModelStore()
 
 def load_models():
     """Charge les modèles ML au démarrage de l'application."""
-    rf_path      = os.path.join(MODELS_DIR, "rf_menage_classifier.pkl")
-    xgb_path     = os.path.join(MODELS_DIR, "xgb_individu_scorer.pkl")
-    kmeans_path  = os.path.join(MODELS_DIR, "kmeans_regional.pkl")
-    profiles_path = os.path.join(MODELS_DIR, "regional_clusters.csv")
-    scores_path  = os.path.join(MODELS_DIR, "individu_scores.csv")
+    rf_path      = _first_existing_path(
+        os.path.join(MODELS_DIR, "rf_menage_classifier.pkl"),
+        os.path.join(OUTPUTS_DIR, "rf_menage_classifier.pkl"),
+    )
+    xgb_path     = _first_existing_path(
+        os.path.join(MODELS_DIR, "xgb_individu_scorer.pkl"),
+        os.path.join(OUTPUTS_DIR, "xgb_individu_scorer.pkl"),
+    )
+    kmeans_path  = _first_existing_path(
+        os.path.join(MODELS_DIR, "kmeans_regional.pkl"),
+        os.path.join(OUTPUTS_DIR, "kmeans_regional.pkl"),
+    )
+    profiles_path = _first_existing_path(
+        os.path.join(MODELS_DIR, "regional_clusters.csv"),
+        os.path.join(OUTPUTS_DIR, "regional_clusters.csv"),
+    )
+    scores_path  = os.path.join(OUTPUTS_DIR, "individu_scores.csv")
 
     if os.path.exists(rf_path):
-        model_store.rf_model = joblib.load(rf_path)
-        print(f"[API] ✓ Random Forest chargé")
+        try:
+            model_store.rf_model = joblib.load(rf_path)
+            print(f"[API] ✓ Random Forest chargé")
+        except Exception as exc:
+            model_store.rf_model = None
+            print(f"[API] ⚠ Random Forest non chargeable ({rf_path}): {exc}")
     else:
         print(f"[API] ⚠ Random Forest non trouvé ({rf_path})")
 
     if os.path.exists(xgb_path):
-        model_store.xgb_bundle = joblib.load(xgb_path)
-        print(f"[API] ✓ XGBoost chargé")
+        try:
+            model_store.xgb_bundle = joblib.load(xgb_path)
+            print(f"[API] ✓ XGBoost chargé")
+        except Exception as exc:
+            model_store.xgb_bundle = None
+            print(f"[API] ⚠ XGBoost non chargeable ({xgb_path}): {exc}")
     else:
         print(f"[API] ⚠ XGBoost non trouvé ({xgb_path})")
 
     if os.path.exists(kmeans_path):
-        model_store.kmeans_bundle = joblib.load(kmeans_path)
-        print(f"[API] ✓ K-Means chargé")
+        try:
+            model_store.kmeans_bundle = joblib.load(kmeans_path)
+            print(f"[API] ✓ K-Means chargé")
+        except Exception as exc:
+            model_store.kmeans_bundle = None
+            print(f"[API] ⚠ K-Means non chargeable ({kmeans_path}): {exc}")
     else:
         print(f"[API] ⚠ K-Means non trouvé ({kmeans_path})")
 
@@ -137,6 +218,8 @@ def load_models():
     if os.path.exists(scores_path):
         model_store.predictions_df = pd.read_csv(scores_path)
         print(f"[API] ✓ Scores individus chargés ({len(model_store.predictions_df):,} lignes)")
+    else:
+        print(f"[API] ⚠ Scores individus non trouvés ({scores_path})")
 
 
 def _mock_regional_profiles() -> pd.DataFrame:
@@ -235,7 +318,10 @@ def _regional_vulnerability_scores(df: pd.DataFrame) -> pd.Series:
 
 
 def _read_output_text(filename: str) -> str:
-    path = os.path.join(MODELS_DIR, filename)
+    path = _first_existing_path(
+        os.path.join(MODELS_DIR, filename),
+        os.path.join(OUTPUTS_DIR, filename),
+    )
     if not os.path.exists(path):
         return ""
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
@@ -717,11 +803,19 @@ async def get_dashboard_kpis():
     """
     df = model_store.regional_df
     pred = model_store.predictions_df
+    individu_summary = _get_individu_population_summary()
+    individus_scores = len(pred) if pred is not None else 0
+    echantillon_analyse = individu_summary["echantillon_analyse"] or (individus_scores if individus_scores else None)
 
     kpis = {
         "timestamp": datetime.now().isoformat(),
         "source":    "RGPH 2014 — HCP Maroc",
         "modeles":   _parse_model_reports(),
+        "population_representee": individu_summary["population_representee"],
+        "population_formatted": _format_population_millions(individu_summary["population_representee"]),
+        "population_source": individu_summary["population_source"],
+        "echantillon_analyse": echantillon_analyse,
+        "individus_scores": individus_scores,
     }
 
     # KPIs régionaux
@@ -729,7 +823,10 @@ async def get_dashboard_kpis():
         vuln_scores = _regional_vulnerability_scores(df)
         kpis["national"] = {
             "nb_regions":          len(df),
-            "population_totale":    int(df["population"].sum()) if "population" in df.columns else None,
+            "population_totale":    individu_summary["population_representee"],
+            "population_representee": individu_summary["population_representee"],
+            "population_formatted": _format_population_millions(individu_summary["population_representee"]),
+            "echantillon_analyse": echantillon_analyse,
             "age_moyen_national":  round(float(df["age_moyen"].mean()), 1) if "age_moyen" in df.columns else None,
             "taux_emploi_moyen":   round(float(df["taux_emploi"].mean()), 3) if "taux_emploi" in df.columns else None,
             "taux_chomage_moyen":  round(float(df["taux_chomage"].mean()), 3) if "taux_chomage" in df.columns else None,
@@ -776,7 +873,7 @@ async def get_dashboard_kpis():
             "pct_non_vulnerable":  round(float(dist.get(0, 0)) * 100, 1),
             "pct_vulnerable":      round(float(dist.get(1, 0)) * 100, 1),
             "pct_tres_vulnerable": round(float(dist.get(2, 0)) * 100, 1),
-            "nb_individus":        len(pred),
+            "nb_individus":        individus_scores,
         }
 
         if "reg" in pred.columns and "score_continu" in pred.columns:

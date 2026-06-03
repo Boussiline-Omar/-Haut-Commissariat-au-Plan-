@@ -187,7 +187,7 @@ tr:hover td{background:var(--surface)}
 <div id="vue-globale" class="page active">
   <div class="kpi-row">
     <div class="kpi">
-      <div class="kpi-label">Population recensée</div>
+      <div class="kpi-label">Population représentée</div>
       <div class="kpi-value">—</div>
       <div class="kpi-sub">Data unavailable</div>
     </div>
@@ -661,9 +661,18 @@ function updateKPIDisplay(){
   if(kpiElements.length < 4) return;
   const nat = DASHBOARD_KPI?.national || {};
   const indiv = DASHBOARD_KPI?.vulnerabilite_individuelle || null;
-  const population = parseNumber(nat.population_totale);
-  kpiElements[0].querySelector('.kpi-value').textContent = formatTotal(population);
-  kpiElements[0].querySelector('.kpi-sub').textContent = Number.isFinite(population) ? `${present(nat.nb_regions, 'N/D')} régions` : 'Data unavailable';
+  const population = parseNumber(DASHBOARD_KPI?.population_representee ?? nat.population_representee ?? nat.population_totale);
+  const populationFormatted = present(DASHBOARD_KPI?.population_formatted ?? nat.population_formatted, null);
+  const sampleSize = parseNumber(
+    DASHBOARD_KPI?.echantillon_analyse ??
+    nat.echantillon_analyse ??
+    DASHBOARD_KPI?.individus_scores ??
+    indiv?.nb_individus
+  );
+  kpiElements[0].querySelector('.kpi-value').textContent = populationFormatted || (Number.isFinite(population) ? formatTotal(population) : '—');
+  kpiElements[0].querySelector('.kpi-sub').textContent = Number.isFinite(sampleSize)
+    ? `Échantillon analysé : ${formatTotal(sampleSize)} individus`
+    : 'Échantillon analysé : N/D';
   kpiElements[1].querySelector('.kpi-value').textContent = pct(nat.taux_emploi_moyen);
   kpiElements[2].querySelector('.kpi-value').textContent = pct(nat.pct_alphabete_moyen);
   const veryVulnerable = parseNumber(indiv?.pct_tres_vulnerable);

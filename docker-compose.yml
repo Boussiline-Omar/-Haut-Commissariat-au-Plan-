@@ -1,13 +1,11 @@
-version: '3.8'
-
 services:
   api:
     build: .
-    container_name: rgph-api
     ports:
       - "8000:8000"
     environment:
       - MODELS_DIR=/app/models/
+      - OUTPUTS_DIR=/app/outputs/
     volumes:
       - ./outputs:/app/outputs
       - ./models:/app/models

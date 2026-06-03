@@ -1,35 +1,39 @@
-============================================================
-  XGBoost Individual Vulnerability Prediction Report
-============================================================
-  Accuracy       : 1.0000
+=================================================================
+  RAPPORT D'ÉVALUATION — XGBoost
+  RGPH 2014 — Score Vulnérabilité Individuelle
+=================================================================
+  Accuracy         : 0.9998
+  F1-Score         : 0.9998   (weighted)
+  ROC AUC (OvR)    : 1.0000  (weighted)
+  Avg Precision    : 1.0000   (weighted)
+  Best iteration   : 499
 
-  Classification Report :
-                 precision    recall  f1-score   support
+  RAPPORT DÉTAILLÉ PAR CLASSE :
+                     precision    recall  f1-score   support
 
- Non vulnérable       1.00      1.00      1.00      4993
-     Vulnérable       1.00      1.00      1.00      5001
-Très vulnérable       1.00      1.00      1.00      9999
+ Non vulnérable (0)       1.00      1.00      1.00      6817
+     Vulnérable (1)       1.00      1.00      1.00      7021
+Très vulnérable (2)       1.00      1.00      1.00      6155
 
-       accuracy                           1.00     19993
-      macro avg       1.00      1.00      1.00     19993
-   weighted avg       1.00      1.00      1.00     19993
+           accuracy                           1.00     19993
+          macro avg       1.00      1.00      1.00     19993
+       weighted avg       1.00      1.00      1.00     19993
 
 
-  IMPORTANCE DES FEATURES (Top 15 by Gain) :
-  Feature                        Gain       Cover     
-------------------------------------------------------------
-  SIT_HANDICAP                   1460.9640  3901.8220  ██████████████████████████████
-  HANDI_MOB                      0.3838     1060.1243  
-  HANDI_AUD                      0.3406     772.5754   
-  HANDI_COM                      0.3179     1659.1079  
-  HANDI_ENTR                     0.2980     918.7250   
-  STAT_PROF                      0.2802     547.1456   
-  ENF_DEC                        0.2760     616.5899   
-  ENF_VIV                        0.2747     601.5298   
-  HANDI_VIS                      0.2732     577.7010   
-  est_chomeur                    0.2725     1806.7769  
-  ACT_SECTEUR                    0.2712     619.6895   
-  HANDI_MEM                      0.2604     601.5696   
-  a_formation_pro                0.2456     582.1047   
-  scolarise_actuel               0.2290     398.5221   
-  reg                            0.2186     577.7654   
+  IMPORTANCE DES FEATURES (par gain moyen) :
+  Feature                            Gain       Cover  Barre
+  mil                                45.3      1594.8  ██████████████████████████████
+  SIT_HANDICAP                       29.3      1318.8  ███████████████████
+  TY_ACT                             27.8      1087.4  ██████████████████
+  indice_scolarisation               24.7      1321.0  ████████████████
+  est_occupe                         16.9       779.6  ███████████
+  STAT_PROF                          16.3       753.2  ██████████
+  LIR_ECR                            15.0      1005.3  █████████
+  ACT_SECTEUR                        13.4       779.8  ████████
+  NIV_ET_AGR                         12.2       705.6  ████████
+  AGE5                               11.1       998.1  ███████
+  a_diplome_eg                        5.0       278.9  ███
+  est_chomeur                         3.9      1434.0  ██
+  ENF_DEC                             0.9       487.0  
+  ENF_VIV                             0.9       568.9  
+  HANDI_AUD                           0.8      1869.7  

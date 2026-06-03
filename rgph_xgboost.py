@@ -21,8 +21,14 @@ import pandas as pd
 import numpy as np
 import os
 import joblib
+import sys
 import warnings
 warnings.filterwarnings("ignore")
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import xgboost as xgb
 from xgboost import XGBClassifier
@@ -39,13 +45,16 @@ from sklearn.preprocessing import label_binarize
 # 1. CONFIGURATION
 # ──────────────────────────────────────────────────────────────
 
-DATA_INDIVIDU   = "Individu.csv"
-OUTPUT_DIR      = "outputs/"
-MODEL_PATH      = os.path.join(OUTPUT_DIR, "xgb_individu_scorer.pkl")
+BASE_DIR        = os.path.dirname(os.path.abspath(__file__))
+DATA_INDIVIDU   = os.path.join(BASE_DIR, "Individu.csv")
+MODEL_DIR       = os.path.join(BASE_DIR, "models")
+OUTPUT_DIR      = os.path.join(BASE_DIR, "outputs")
+MODEL_PATH      = os.path.join(MODEL_DIR, "xgb_individu_scorer.pkl")
 SCORES_PATH     = os.path.join(OUTPUT_DIR, "individu_scores.csv")
-REPORT_PATH     = os.path.join(OUTPUT_DIR, "xgb_report.txt")
+REPORT_PATH     = os.path.join(MODEL_DIR, "xgb_report.txt")
 SHAP_PATH       = os.path.join(OUTPUT_DIR, "shap_summary.csv")
 
+os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 RANDOM_STATE = 42
@@ -101,8 +110,14 @@ def load_and_etl(path: str) -> pd.DataFrame:
         )
 
     if not os.path.exists(path):
-        print(f"[WARN] '{path}' introuvable → données synthétiques")
-        df = generate_synthetic_data(n=50_000)
+        if os.environ.get("RGPH_ALLOW_SYNTHETIC_XGB") == "1":
+            print(f"[WARN] '{path}' introuvable; RGPH_ALLOW_SYNTHETIC_XGB=1, données synthétiques activées")
+            df = generate_synthetic_data(n=50_000)
+        else:
+            raise FileNotFoundError(
+                f"Input file not found: {path}. Place the real RGPH Individu.csv at the project root "
+                "or set RGPH_ALLOW_SYNTHETIC_XGB=1 only for local demos."
+            )
     else:
         df = load_individu(path)
     df = run_etl(df)
@@ -432,6 +447,8 @@ def compute_shap_summary(model, X_sample: pd.DataFrame,
             shap_abs = np.mean([np.abs(sv) for sv in shap_values], axis=0)
         else:
             shap_abs = np.abs(shap_values)
+            if shap_abs.ndim == 3:
+                shap_abs = shap_abs.mean(axis=2)
 
         shap_df = pd.DataFrame({
             "feature": feature_names,
@@ -449,9 +466,8 @@ def compute_shap_summary(model, X_sample: pd.DataFrame,
         print(f"\n[SAVE] Valeurs SHAP → {SHAP_PATH}")
         return shap_df
 
-    except ImportError:
-        print("[SHAP] Package 'shap' non installé — calcul ignoré.")
-        print("       Installer avec : pip install shap")
+    except Exception as exc:
+        print(f"[SHAP] Calcul ignoré: {exc}")
         # Fallback : importance XGBoost native
         imp = model.get_booster().get_score(importance_type="gain")
         shap_df = pd.DataFrame(
@@ -525,6 +541,34 @@ def run_xgb_pipeline(df: pd.DataFrame, tune: bool = False) -> pd.DataFrame:
         df["proba_xgb_1"] * 0.5 + df["proba_xgb_2"] * 1.0
     ).clip(0, 1)
 
+    risk_labels = {
+        0: "Non vulnérable",
+        1: "Vulnérable",
+        2: "Très vulnérable",
+    }
+    sex_labels = {1: "Homme", 2: "Femme"}
+    milieu_labels = {1: "Urbain", 2: "Rural"}
+    region_labels = {
+        1: "Tanger-Tétouan-Al Hoceïma",
+        2: "Oriental",
+        3: "Fès-Meknès",
+        4: "Rabat-Salé-Kénitra",
+        5: "Béni Mellal-Khénifra",
+        6: "Casablanca-Settat",
+        7: "Marrakech-Safi",
+        8: "Drâa-Tafilalet",
+        9: "Souss-Massa",
+        10: "Guelmim-Oued Noun",
+        11: "Laâyoune-Sakia El Hamra",
+        12: "Dakhla-Oued Ed-Dahab",
+    }
+    df["risk_level"] = df["pred_xgb"].map(risk_labels)
+    df["sex_label"] = df["sexe"].map(sex_labels)
+    df["milieu_label"] = df["mil"].map(milieu_labels)
+    df["region_label"] = df["reg"].map(region_labels)
+    age_start = pd.to_numeric(df["AGE5"], errors="coerce").astype("Int64")
+    df["age_group"] = age_start.astype(str) + "-" + (age_start + 4).astype(str)
+
     # Sauvegarde rapport
     with open(REPORT_PATH, "w", encoding="utf-8") as f:
         f.write(report)
@@ -535,9 +579,11 @@ def run_xgb_pipeline(df: pd.DataFrame, tune: bool = False) -> pd.DataFrame:
 
     # Export scores individuels
     export_cols = [
-        "reg", "MEN_PRO", "NOR_MEN", "sexe", "AGE5", "mil",
+        "reg", "region_label", "MEN_PRO", "NOR_MEN",
+        "sexe", "sex_label", "AGE5", "age_group",
+        "mil", "milieu_label",
         "score_vuln_indiv", "classe_vuln_indiv",
-        "pred_xgb", "score_continu",
+        "pred_xgb", "risk_level", "score_continu",
         "proba_xgb_0", "proba_xgb_1", "proba_xgb_2",
     ]
     export_cols = [c for c in export_cols if c in df.columns]
