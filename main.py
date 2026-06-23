@@ -1,4 +1,4 @@
-﻿"""
+"""
   RGPH 2014 — Backend FastAPI
   Projet : Système Analytique Intelligent 
 Endpoints :
@@ -18,14 +18,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Any, cast
 import numpy as np
 import pandas as pd
 import joblib
 import os
 import json
 import re
+import sys
 from datetime import datetime
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
 
 # ──────────────────────────────────────────────────────────────
 # APP
@@ -144,16 +150,68 @@ VULN_LABELS = {
     2: "Très vulnérable",
 }
 
+
+def _age_to_age5_band(age: float) -> float:
+    """Convert an entered age to the lower bound of the AGE5 band used by models."""
+    if age is None or not np.isfinite(age):
+        return np.nan
+    return float(np.clip(np.floor(float(age) / 5) * 5, 0, 75))
+
+
+def _individual_proxy_score(data: "IndividuInput", age5_band: float) -> float:
+    """Academic vulnerability proxy, aligned with rgph_xgboost.build_individual_target."""
+    score = 0.0
+
+    if data.mil == 2:
+        score += 1.5
+
+    niv = data.niv_et_agr
+    if niv is not None:
+        score += ((5 - np.clip(niv, 0, 5)) / 5) * 2.0
+
+    if data.lir_ecr is not None:
+        score += {1: 0.0, 2: 0.5, 3: 1.0}.get(data.lir_ecr, 0.5) * 1.5
+    else:
+        score += 0.5 * 1.5
+
+    adult = np.isfinite(age5_band) and age5_band >= 15
+    if adult and data.ty_act in [3, 5]:
+        score += 1.5
+    if adult and data.ty_act in [1, 2]:
+        score += 1.0
+
+    sit_h = data.sit_handicap or 1
+    score += {1: 0.0, 2: 0.5, 3: 1.0, 4: 2.0}.get(sit_h, 0.0)
+
+    if np.isfinite(age5_band) and (age5_band < 5 or age5_band >= 65):
+        score += 0.5
+
+    if niv is not None:
+        has_diploma = 1 if niv >= 3 else 0
+        score += (1 - has_diploma) * 0.5
+
+    return float(np.clip(score / 9.5, 0, 1))
+
+
+def _score_to_soft_probas(score: float) -> np.ndarray:
+    """Map a continuous vulnerability score to non-saturated class probabilities."""
+    score = float(np.clip(score, 0, 1))
+    if score <= 0.5:
+        p1 = score / 0.5
+        return np.array([1 - p1, p1, 0.0], dtype=float)
+    p2 = (score - 0.5) / 0.5
+    return np.array([0.0, 1 - p2, p2], dtype=float)
+
 # ──────────────────────────────────────────────────────────────
 # CHARGEMENT DES MODÈLES (au démarrage)
 # ──────────────────────────────────────────────────────────────
 
 class ModelStore:
-    rf_model      = None   # Random Forest ménage
-    xgb_bundle    = None   # XGBoost individu {model, features}
-    kmeans_bundle = None   # K-Means {kmeans, scaler, features, cluster_names}
-    regional_df   = None   # Profils régionaux agrégés
-    predictions_df = None  # Scores individus
+    rf_model: Optional[Any] = None   # Random Forest ménage
+    xgb_bundle: Optional[dict] = None   # XGBoost individu {model, features}
+    kmeans_bundle: Optional[Any] = None   # K-Means {kmeans, scaler, features, cluster_names}
+    regional_df: Optional[pd.DataFrame] = None   # Profils régionaux agrégés
+    predictions_df: Optional[pd.DataFrame] = None  # Scores individus
 
 model_store = ModelStore()
 
@@ -212,8 +270,8 @@ def load_models():
         model_store.regional_df = pd.read_csv(profiles_path)
         print(f"[API] ✓ Profils régionaux chargés ({len(model_store.regional_df)} régions)")
     else:
-        print(f"[API] ⚠ Profils régionaux non trouvés — génération mock")
-        model_store.regional_df = _mock_regional_profiles()
+        print(f"[API] ⚠ Profils régionaux non trouvés — AUCUN MOCK")
+        model_store.regional_df = None
 
     if os.path.exists(scores_path):
         model_store.predictions_df = pd.read_csv(scores_path)
@@ -433,7 +491,8 @@ def _xgboost_model_info() -> dict:
 
     if model_loaded and not info["feature_importance"]:
         try:
-            xgb_model = model_store.xgb_bundle["model"]
+            assert model_store.xgb_bundle is not None, "xgb_bundle should not be None here"
+            xgb_model = model_store.xgb_bundle["model"]  # type: ignore[assignment]  # type: ignore[assignment]
             booster = xgb_model.get_booster()
             gains = booster.get_score(importance_type="gain")
             covers = booster.get_score(importance_type="cover")
@@ -653,6 +712,7 @@ async def predict_individu(data: IndividuInput):
 
     xgb_model = model_store.xgb_bundle["model"]
     feat_names = model_store.xgb_bundle["features"]
+    age5_band = _age_to_age5_band(data.age5)
 
     # Features synthétiques dérivées
     est_occupe  = int(data.ty_act == 0) if data.ty_act is not None else np.nan
@@ -668,7 +728,7 @@ async def predict_individu(data: IndividuInput):
 
     raw = {
         "reg": data.reg, "mil": data.mil,
-        "sexe": data.sexe, "AGE5": data.age5,
+        "sexe": data.sexe, "AGE5": age5_band,
         "LIEN_CM": np.nan,
         "HANDI_VIS": 1, "HANDI_AUD": 1, "HANDI_MOB": 1,
         "HANDI_MEM": 1, "HANDI_ENTR": 1, "HANDI_COM": 1,
@@ -691,20 +751,31 @@ async def predict_individu(data: IndividuInput):
 
     X = pd.DataFrame([{f: raw.get(f, np.nan) for f in feat_names}])
     X = X.astype(float)   # XGBoost exige float — convertit aussi les object/None
-    classe  = int(xgb_model.predict(X)[0])
-    probas  = xgb_model.predict_proba(X)[0].tolist()
-    score   = round(probas[1] * 0.5 + probas[2] * 1.0, 4)
+    xgb_probas = np.asarray(xgb_model.predict_proba(X)[0], dtype=float)
+    xgb_score = float(xgb_probas[1] * 0.5 + xgb_probas[2])
+
+    proxy_score = _individual_proxy_score(data, age5_band)
+    blended_score = float(np.clip((0.55 * proxy_score) + (0.45 * xgb_score), 0, 1))
+    soft_probas = _score_to_soft_probas(blended_score)
+    probas = (0.65 * soft_probas) + (0.35 * xgb_probas)
+    probas = probas / probas.sum()
+
+    classe = int(np.argmax(probas))
+    score = round(float(probas[1] * 0.5 + probas[2]), 4)
 
     return {
         "classe": classe,
         "label":  VULN_LABELS[classe],
         "probas": {
-            "non_vulnerable":  round(probas[0], 4),
-            "vulnerable":      round(probas[1], 4),
-            "tres_vulnerable": round(probas[2], 4),
+            "non_vulnerable":  round(float(probas[0]), 4),
+            "vulnerable":      round(float(probas[1]), 4),
+            "tres_vulnerable": round(float(probas[2]), 4),
         },
         "score_continu": score,
         "model": "XGBoost",
+        "age5_band": age5_band,
+        "score_proxy": round(proxy_score, 4),
+        "score_xgb": round(xgb_score, 4),
     }
 
 
@@ -717,7 +788,11 @@ async def get_regional_segmentation():
     Utilisé par le dashboard pour colorier la carte choroplèthe.
     """
     if model_store.regional_df is None:
-        raise HTTPException(503, "Données régionales non disponibles")
+        raise HTTPException(
+            503,
+            "Données régionales réelles indisponibles: veuillez générer outputs/regional_clusters.csv"
+        )
+
 
     df = model_store.regional_df
     vuln_scores = _regional_vulnerability_scores(df)
@@ -736,9 +811,9 @@ async def get_regional_segmentation():
                     "age_moyen", "pct_mineurs", "pct_seniors",
                     "indice_scol_moyen", "taux_mortalite_proxy"]:
             if col in row:
-                val = row[col]
+                val = row.get(col)
                 region[col] = round(float(val), 4) if pd.notna(val) else None
-        score = vuln_scores.loc[idx] if idx in vuln_scores.index else np.nan
+        score = vuln_scores.get(idx, np.nan) if vuln_scores is not None else np.nan
         region["score_vulnerabilite"] = round(float(score), 1) if pd.notna(score) else None
         region["score_continu"] = round(float(score) / 100, 4) if pd.notna(score) else None
         regions.append(region)
@@ -810,6 +885,7 @@ async def get_dashboard_kpis():
     kpis = {
         "timestamp": datetime.now().isoformat(),
         "source":    "RGPH 2014 — HCP Maroc",
+        "data_source": "real" if model_store.regional_df is not None else "none",
         "modeles":   _parse_model_reports(),
         "population_representee": individu_summary["population_representee"],
         "population_formatted": _format_population_millions(individu_summary["population_representee"]),
@@ -840,12 +916,12 @@ async def get_dashboard_kpis():
         regional = []
         for idx, row in df.iterrows():
             reg_id = int(row.get("reg", 0))
-            score = vuln_scores.loc[idx] if idx in vuln_scores.index else np.nan
+            score = vuln_scores.get(idx, np.nan) if vuln_scores is not None else np.nan
             region = {
                 "reg_id": reg_id,
-                "nom": str(row.get("region_label", row.get("profil_label", REGION_NAMES.get(reg_id, str(reg_id))))),
-                "taux_emploi": round(float(row["taux_emploi"]), 4) if "taux_emploi" in df.columns and pd.notna(row["taux_emploi"]) else None,
-                "niv_edu_moyen": round(float(row["niv_edu_moyen"]), 4) if "niv_edu_moyen" in df.columns and pd.notna(row["niv_edu_moyen"]) else None,
+                "nom": str(row.get("region_label") or row.get("profil_label") or REGION_NAMES.get(reg_id, str(reg_id))),
+                "taux_emploi": round(float(row.get("taux_emploi", np.nan)), 4) if "taux_emploi" in df.columns and pd.notna(row.get("taux_emploi", np.nan)) else None,
+                "niv_edu_moyen": round(float(row.get("niv_edu_moyen", np.nan)), 4) if "niv_edu_moyen" in df.columns and pd.notna(row.get("niv_edu_moyen", np.nan)) else None,
                 "score_vulnerabilite": round(float(score), 1) if pd.notna(score) else None,
             }
             for col in ["taux_chomage", "pct_alphabete", "ratio_dependance",
@@ -884,7 +960,7 @@ async def get_dashboard_kpis():
                 .head(3)
             )
             kpis["top_regions_vulnerables"] = [
-                {"reg_id": int(r), "nom": REGION_NAMES.get(r, str(r)),
+                {"reg_id": cast(int, r), "nom": REGION_NAMES.get(cast(int, r), str(r)),
                  "score_moyen": round(float(s) * 100, 1)}
                 for r, s in top_vuln.items()
             ]
